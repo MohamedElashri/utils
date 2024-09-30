@@ -2,17 +2,19 @@
 
 # Function to display help message
 show_help() {
-    echo "Usage: $0 [-p|--push] -b|--branch <branch_name> -m|--message <commit_message>"
+    echo "Usage: $0 [-p|--push] [-b|--branch <branch_name>] [-m|--message <commit_message>] [-c|--checkout-back]"
     echo ""
     echo "Options:"
     echo "  -p, --push            Push the branch to the remote repository"
     echo "  -b, --branch          Specify the new branch name"
     echo "  -m, --message         Specify the commit message"
+    echo "  -c, --checkout-back   Checkout back to 'main' or 'master' after commit and push"
     echo "  -h, --help            Display this help message"
 }
 
 # Initialize variables
 push_flag=false
+checkout_flag=false
 branch_name=""
 commit_message=""
 
@@ -29,6 +31,9 @@ while [[ "$1" != "" ]]; do
         -m | --message )
             shift
             commit_message="$1"
+            ;;
+        -c | --checkout-back )
+            checkout_flag=true
             ;;
         -h | --help )
             show_help
@@ -76,3 +81,16 @@ else
     echo "Branch '$branch_name' created and changes committed locally. Use '--push' to push the branch to the remote repository."
 fi
 
+# Step 8: Checkout back to 'main' or 'master' if --checkout-back flag is provided
+if [ "$checkout_flag" = true ]; then
+    if git show-ref --verify --quiet refs/heads/main; then
+        git checkout main || { echo "Failed to checkout back to 'main'."; exit 1; }
+        echo "Checked out back to 'main'."
+    elif git show-ref --verify --quiet refs/heads/master; then
+        git checkout master || { echo "Failed to checkout back to 'master'."; exit 1; }
+        echo "Checked out back to 'master'."
+    else
+        echo "Neither 'main' nor 'master' branch found."
+        exit 1
+    fi
+fi
