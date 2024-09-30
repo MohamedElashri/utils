@@ -38,9 +38,9 @@ Follow these steps to install the script:
     ```
     
     Place the script in `~/utils/git_feature/`
-   ```bash
-   mv git_feature.sh ~/utils/git_feature/git_feature
-
+    ```bash
+    mv git_feature.sh ~/utils/git_feature/git_feature
+    ```
     or use this command to create the file directly:
 
     ```bash
