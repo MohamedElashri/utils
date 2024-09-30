@@ -47,50 +47,58 @@ while [[ "$1" != "" ]]; do
     shift
 done
 
-# Step 1: Check if a branch name and commit message are provided
+# Check if a branch name and commit message are provided
 if [[ -z "$branch_name" || -z "$commit_message" ]]; then
     echo "Error: Branch name and commit message are required."
     show_help
     exit 1
 fi
 
-# Step 2: Check for unstaged changes
-if git diff --quiet && git diff --cached --quiet; then
+# Function to get the current branch name
+get_current_branch() {
+    git rev-parse --abbrev-ref HEAD
+}
+
+# Function to check if a branch exists
+branch_exists() {
+    git show-ref --verify --quiet refs/heads/"$1"
+    return $?
+}
+
+# Save the current branch
+current_branch=$(get_current_branch)
+
+# Check if the branch already exists
+if branch_exists "$branch_name"; then
+    echo "Branch '$branch_name' already exists. Checking it out..."
+    git checkout "$branch_name" || { echo "Failed to checkout existing branch."; exit 1; }
+else
+    # Create a new branch
+    git checkout -b "$branch_name" || { echo "Failed to create new branch."; exit 1; }
+fi
+
+# Stage all changes, including untracked files
+git add --all || { echo "Failed to stage changes."; exit 1; }
+
+# Check if there are any changes to commit
+if git diff --cached --quiet; then
     echo "No changes to commit."
     exit 0
 fi
 
-# Step 3: Stash the changes
-git stash -u || { echo "Failed to stash changes."; exit 1; }
-
-# Step 4: Create a new branch
-git checkout -b "$branch_name" || { echo "Failed to create new branch."; exit 1; }
-
-# Step 5: Apply the stashed changes
-git stash pop || { echo "Failed to apply stashed changes."; exit 1; }
-
-# Step 6: Commit the changes
-git add . || { echo "Failed to stage changes."; exit 1; }
+# Commit the changes
 git commit -m "$commit_message" || { echo "Failed to commit changes."; exit 1; }
 
-# Step 7: Push the branch if --push flag is provided
+# Push the branch if --push flag is provided
 if [ "$push_flag" = true ]; then
-    git push origin "$branch_name" || { echo "Failed to push to remote."; exit 1; }
+    git push --set-upstream origin "$branch_name" || { echo "Failed to push to remote."; exit 1; }
     echo "Branch '$branch_name' successfully pushed to remote."
 else
     echo "Branch '$branch_name' created and changes committed locally. Use '--push' to push the branch to the remote repository."
 fi
 
-# Step 8: Checkout back to 'main' or 'master' if --checkout-back flag is provided
+# Checkout back to the original branch if --checkout-back flag is provided
 if [ "$checkout_flag" = true ]; then
-    if git show-ref --verify --quiet refs/heads/main; then
-        git checkout main || { echo "Failed to checkout back to 'main'."; exit 1; }
-        echo "Checked out back to 'main'."
-    elif git show-ref --verify --quiet refs/heads/master; then
-        git checkout master || { echo "Failed to checkout back to 'master'."; exit 1; }
-        echo "Checked out back to 'master'."
-    else
-        echo "Neither 'main' nor 'master' branch found."
-        exit 1
-    fi
+    git checkout "$current_branch" || { echo "Failed to checkout back to '$current_branch'."; exit 1; }
+    echo "Checked out back to '$current_branch'."
 fi
