@@ -2,7 +2,39 @@ history() {
     HIST_BACKUP_DIR="$HOME/.history/.history_backups"
     FAVORITES_FILE="$HOME/.history/.history_favorites"
 
-    if [ "$#" -eq 0 ]; then
+    show_help() {
+        echo "History Wrapper - Enhanced shell history management"
+        echo
+        echo "Usage: history [options] [arguments]"
+        echo
+        echo "Options:"
+        echo "  <n>                       Show last n entries."
+        echo "  search <keyword>          Search for commands containing a specific keyword."
+        echo "  run <ID>                  Run a command by its ID from history."
+        echo "  delete <ID>               Delete a specific command by ID."
+        echo "  clear                     Clear the entire command history."
+        echo "  unique                    Show unique commands in history."
+        echo "  export <filename>         Export the history to a file."
+        echo "  import <filename>         Import history from a file."
+        echo "  stats                     Show command usage statistics."
+        echo "  interactive               Interactive search of history using fzf."
+        echo "  range <start_ID> <end_ID> Show history within a range of IDs."
+        echo "  last                      Re-run the last executed command."
+        echo "  blacklist <command>       Prevent specific commands from being saved in history."
+        echo "  favorite <ID>             Mark a command as a favorite."
+        echo "  showfavorites             Show all favorite commands."
+        echo "  backup                    Backup the current history to a timestamped file."
+        echo "  restorelast               Restore the last deleted command."
+        echo "  mostused                  Show the most frequently used commands."
+        echo "  savesession <filename>    Save the current session history to a file."
+        echo "  restoresession <filename> Restore session history from a file."
+        echo "  -h, --help                Show this help message."
+        echo
+    }
+
+    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+        show_help
+    elif [ "$#" -eq 0 ]; then
         # No arguments, display all history.
         builtin history
     elif [[ "$1" =~ ^[0-9]+$ ]]; then
