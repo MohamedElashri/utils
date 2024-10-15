@@ -4,13 +4,10 @@
 
 ## Installation
 
-To install `txm`, simply place the script in your `$HOME/.local/bin` directory, or any directory in your `$PATH`.
+To install `txm`, you can run the following command to download, install, and make it executable in one line:
 
 ```bash
-wget https://github.com/MohamedElashri/utils/raw/refs/heads/main/remote/tmux-remote/txm/txm
-mkdir -p $HOME/.local/bin
-cp txm $HOME/.local/bin/txm
-chmod +x $HOME/.local/bin/txm
+[[ ! -d "$HOME/.local/bin" ]] && mkdir -p "$HOME/.local/bin"; wget -qO "$HOME/.local/bin/txm" https://github.com/MohamedElashri/utils/raw/refs/heads/main/remote/tmux-remote/txm/txm && chmod +x "$HOME/.local/bin/txm"
 ```
 
 Ensure `$HOME/.local/bin` is in your `$PATH` for easy access.
@@ -94,3 +91,4 @@ To send the keys `ls -la` to pane index `0` in window `1` of `my_session`:
 ```bash
 txm send-keys my_session 1 0 "ls -la"
 ```
+
