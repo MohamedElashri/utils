@@ -2,22 +2,20 @@
 
 # Path: $HOME/.local/bin/txm
 
-# Check if the terminal supports colors
-if [ -t 1 ] && [ -n "$TERM" ] && [ "$TERM" != "dumb" ]; then
-  RED='\033[0;31m'
-  YELLOW='\033[0;33m'
-  GREEN='\033[0;32m'
-  BLUE='\033[0;34m'
-  MAGENTA='\033[0;35m'
-  NC='\033[0m' # No Color
-else
-  RED=''
-  YELLOW=''
-  GREEN=''
-  BLUE=''
-  MAGENTA=''
-  NC=''
-fi
+# Function to set up colors conditionally
+set_colors() {
+  if [ -t 1 ] && [ -n "$TERM" ] && [ "$TERM" != "dumb" ]; then
+    RED='\033[0;31m'
+    YELLOW='\033[0;33m'
+    GREEN='\033[0;32m'
+    BLUE='\033[0;34m'
+    MAGENTA='\033[0;35m'
+    NC='\033[0m' # No Color
+  else
+    RED='' YELLOW='' GREEN='' BLUE='' MAGENTA='' NC=''
+  fi
+}
+set_colors
 
 # Logging functions
 log_info() {
@@ -32,7 +30,7 @@ log_error() {
   echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Display usage information
+# Function to display usage information
 usage() {
   local term_width=$(tput cols 2>/dev/null || echo 80)
   local cmd_col_width=0
@@ -57,6 +55,7 @@ usage() {
     "swap-window|[session_name] [window_index_1] [window_index_2]|Swap two windows in a tmux session"
     "resize-pane|[session_name] [window_index] [pane_index] [resize_option]|Resize a pane in a tmux window"
     "send-keys|[session_name] [window_index] [pane_index] [keys]|Send keys to a pane in a tmux window"
+    "nuke||Remove all tmux or screen sessions"
   )
 
   # Calculate maximum widths
@@ -69,7 +68,7 @@ usage() {
   # Add padding
   cmd_col_width=$((cmd_col_width + padding))
   args_col_width=$((args_col_width + padding))
-  
+
   # Calculate description column width
   desc_col_width=$((term_width - cmd_col_width - args_col_width - padding))
 
@@ -90,7 +89,7 @@ print_usage_line() {
   local command="$1"
   local arguments="$2"
   local description="$3"
-  
+
   printf "${GREEN}%-${cmd_col_width}s${NC}${YELLOW}%-${args_col_width}s${NC}" "${command}" "${arguments}"
   print_wrapped_text "${description}" $desc_col_width $((cmd_col_width + args_col_width))
 }
@@ -102,7 +101,7 @@ print_wrapped_text() {
   local line=""
   local word=""
   local first_line=true
-  
+
   for word in $text; do
     if [ $((${#line} + ${#word} + 1)) -le $width ] || [ -z "$line" ]; then
       line="$line $word"
@@ -117,7 +116,7 @@ print_wrapped_text() {
       line=" $word"
     fi
   done
-  
+
   if [ -n "$line" ]; then
     if [ "$first_line" = true ]; then
       printf "%s" "${line# }"
@@ -129,15 +128,27 @@ print_wrapped_text() {
   echo
 }
 
+# Function to log missing argument error and display usage
+missing_arg() {
+  log_error "Please specify $1."
+  usage
+}
 
-
+# Function to check if a session exists
+session_exists() {
+  if [ "$tmux_available" = true ]; then
+    tmux has-session -t "$1" 2>/dev/null
+  else
+    screen -ls | grep -q "$1"
+  fi
+}
 
 # Check for tmux or screen installation
 if command -v tmux &> /dev/null; then
-  TMUX_AVAILABLE=true
+  tmux_available=true
 else
   log_warning "tmux is not installed. Falling back to screen."
-  TMUX_AVAILABLE=false
+  tmux_available=false
   if ! command -v screen &> /dev/null; then
     log_error "Neither tmux nor screen is installed. Please install one of them and try again."
     exit 1
@@ -151,11 +162,8 @@ case "$1" in
     ;;
 
   create)
-    if [ -z "$2" ]; then
-      log_error "Please specify a session name."
-      usage
-    fi
-    if [ "$TMUX_AVAILABLE" = true ]; then
+    [ -z "$2" ] && missing_arg "a session name"
+    if [ "$tmux_available" = true ]; then
       if tmux new-session -d -s "$2" 2>/dev/null; then
         log_info "Session '$2' created with tmux."
       else
@@ -171,7 +179,7 @@ case "$1" in
     ;;
 
   list)
-    if [ "$TMUX_AVAILABLE" = true ]; then
+    if [ "$tmux_available" = true ]; then
       if ! tmux list-sessions 2>/dev/null; then
         log_warning "No tmux sessions found."
       fi
@@ -183,27 +191,28 @@ case "$1" in
     ;;
 
   attach)
-    if [ -z "$2" ]; then
-      log_error "Please specify a session name to attach."
-      usage
-    fi
-    if [ "$TMUX_AVAILABLE" = true ]; then
-      if tmux attach-session -t "$2" 2>/dev/null; then
-        log_info "Attached to tmux session '$2'."
+    [ -z "$2" ] && missing_arg "a session name to attach"
+    if session_exists "$2"; then
+      if [ "$tmux_available" = true ]; then
+        if tmux attach-session -t "$2" 2>/dev/null; then
+          log_info "Attached to tmux session '$2'."
+        else
+          log_error "Failed to attach to tmux session '$2'. It may not exist."
+        fi
       else
-        log_error "Failed to attach to tmux session '$2'. It may not exist."
+        if screen -r "$2"; then
+          log_info "Attached to screen session '$2'."
+        else
+          log_error "Failed to attach to screen session '$2'. It may not exist."
+        fi
       fi
     else
-      if screen -r "$2"; then
-        log_info "Attached to screen session '$2'."
-      else
-        log_error "Failed to attach to screen session '$2'. It may not exist."
-      fi
+      log_warning "Session '$2' does not exist."
     fi
     ;;
 
   detach)
-    if [ "$TMUX_AVAILABLE" = true ]; then
+    if [ "$tmux_available" = true ]; then
       if tmux detach-client 2>/dev/null; then
         log_info "Detached from the current tmux session."
       else
@@ -215,31 +224,29 @@ case "$1" in
     ;;
 
   delete)
-    if [ -z "$2" ]; then
-      log_error "Please specify a session name to delete."
-      usage
-    fi
-    if [ "$TMUX_AVAILABLE" = true ]; then
-      if tmux kill-session -t "$2" 2>/dev/null; then
-        log_info "tmux session '$2' deleted."
+    [ -z "$2" ] && missing_arg "a session name to delete"
+    if session_exists "$2"; then
+      if [ "$tmux_available" = true ]; then
+        if tmux kill-session -t "$2" 2>/dev/null; then
+          log_info "tmux session '$2' deleted."
+        else
+          log_error "Failed to delete tmux session '$2'. It may not exist."
+        fi
       else
-        log_error "Failed to delete tmux session '$2'. It may not exist."
+        if screen -S "$2" -X quit; then
+          log_info "screen session '$2' deleted."
+        else
+          log_error "Failed to delete screen session '$2'. It may not exist."
+        fi
       fi
     else
-      if screen -S "$2" -X quit; then
-        log_info "screen session '$2' deleted."
-      else
-        log_error "Failed to delete screen session '$2'. It may not exist."
-      fi
+      log_warning "Session '$2' does not exist."
     fi
     ;;
 
   new-window)
-    if [ -z "$2" ] || [ -z "$3" ]; then
-      log_error "Please specify both session name and window name."
-      usage
-    fi
-    if [ "$TMUX_AVAILABLE" = true ]; then
+    [ -z "$2" ] || [ -z "$3" ] && missing_arg "both session name and window name"
+    if [ "$tmux_available" = true ]; then
       if tmux new-window -t "$2" -n "$3" 2>/dev/null; then
         log_info "Window '$3' created in tmux session '$2'."
       else
@@ -251,11 +258,8 @@ case "$1" in
     ;;
 
   list-windows)
-    if [ -z "$2" ]; then
-      log_error "Please specify a session name to list windows."
-      usage
-    fi
-    if [ "$TMUX_AVAILABLE" = true ]; then
+    [ -z "$2" ] && missing_arg "a session name to list windows"
+    if [ "$tmux_available" = true ]; then
       if ! tmux list-windows -t "$2" 2>/dev/null; then
         log_warning "No windows found in tmux session '$2'."
       fi
@@ -265,18 +269,37 @@ case "$1" in
     ;;
 
   kill-window)
-    if [ -z "$2" ] || [ -z "$3" ]; then
-      log_error "Please specify both session name and window name to kill."
-      usage
-    fi
-    if [ "$TMUX_AVAILABLE" = true ]; then
-      if tmux kill-window -t "$2":"$3" 2>/dev/null; then
+    [ -z "$2" ] || [ -z "$3" ] && missing_arg "both session name and window name to kill"
+    if [ "$tmux_available" = true ]; then
+      if tmux kill-window -t "$2:$3" 2>/dev/null; then
         log_info "Window '$3' in tmux session '$2' deleted."
       else
         log_error "Failed to delete window '$3' in tmux session '$2'."
       fi
     else
       log_warning "Killing windows is not supported for screen sessions from this script."
+    fi
+    ;;
+
+  nuke)
+    if [ "$tmux_available" = true ]; then
+      if tmux list-sessions >/dev/null 2>&1; then
+        tmux list-sessions -F "#S" | while read -r session; do
+          tmux kill-session -t "$session"
+        done
+        log_info "All tmux sessions have been nuked."
+      else
+        log_warning "No tmux sessions found to nuke."
+      fi
+    else
+      if screen -ls >/dev/null 2>&1; then
+        screen -ls | grep -o '[0-9]*\.\S*' | while read -r session; do
+          screen -S "$session" -X quit
+        done
+        log_info "All screen sessions have been nuked."
+      else
+        log_warning "No screen sessions found to nuke."
+      fi
     fi
     ;;
 
