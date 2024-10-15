@@ -2,12 +2,22 @@
 
 # Path: $HOME/.local/bin/txm
 
-# Colors for logging
-RED='\033[0;31m'
-YELLOW='\033[0;33m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Check if the terminal supports colors
+if [ -t 1 ] && [ -n "$TERM" ] && [ "$TERM" != "dumb" ]; then
+  RED='\033[0;31m'
+  YELLOW='\033[0;33m'
+  GREEN='\033[0;32m'
+  BLUE='\033[0;34m'
+  MAGENTA='\033[0;35m'
+  NC='\033[0m' # No Color
+else
+  RED=''
+  YELLOW=''
+  GREEN=''
+  BLUE=''
+  MAGENTA=''
+  NC=''
+fi
 
 # Logging functions
 log_info() {
@@ -24,27 +34,103 @@ log_error() {
 
 # Display usage information
 usage() {
-  echo -e "${BLUE}Usage:${NC} txm [command] [arguments]"
-  echo -e "${BLUE}Commands:${NC}"
-  echo -e "  ${GREEN}create [session_name]${NC}                       Create a new tmux or screen session"
-  echo -e "  ${GREEN}list${NC}                                    List all tmux or screen sessions"
-  echo -e "  ${GREEN}attach [session_name]${NC}                   Attach to a tmux or screen session"
-  echo -e "  ${GREEN}detach${NC}                                  Detach from the current tmux or screen session"
-  echo -e "  ${GREEN}delete [session_name]${NC}                   Delete a tmux or screen session"
-  echo -e "  ${GREEN}new-window [session_name] [name]${NC}        Create a new window in a tmux or screen session"
-  echo -e "  ${GREEN}list-windows [session_name]${NC}             List windows in a tmux or screen session"
-  echo -e "  ${GREEN}kill-window [session_name] [name]${NC}       Kill a window in a tmux or screen session"
-  echo -e "  ${GREEN}rename-session [session_name] [new_name]${NC} Rename an existing tmux session"
-  echo -e "  ${GREEN}rename-window [session_name] [window_index] [new_name]${NC} Rename a window in a tmux session"
-  echo -e "  ${GREEN}split-window [session_name] [window_index] [vertical|horizontal]${NC} Split a window pane in tmux"
-  echo -e "  ${GREEN}list-panes [session_name] [window_index]${NC} List all panes in a tmux window"
-  echo -e "  ${GREEN}kill-pane [session_name] [window_index] [pane_index]${NC} Kill a specific pane in tmux"
-  echo -e "  ${GREEN}move-window [session_name] [window_index] [new_session]${NC} Move a window to another tmux session"
-  echo -e "  ${GREEN}swap-window [session_name] [window_index_1] [window_index_2]${NC} Swap two windows in a tmux session"
-  echo -e "  ${GREEN}resize-pane [session_name] [window_index] [pane_index] [resize_option]${NC} Resize a pane in tmux"
-  echo -e "  ${GREEN}send-keys [session_name] [window_index] [pane_index] [keys]${NC} Send keys to a pane in tmux"
+  local term_width=$(tput cols 2>/dev/null || echo 80)
+  local cmd_col_width=0
+  local args_col_width=0
+  local desc_col_width=0
+  local padding=2
+  local usage_data=(
+    "create|[session_name]|Create a new tmux or screen session"
+    "list||List all tmux or screen sessions"
+    "attach|[session_name]|Attach to a tmux or screen session"
+    "detach||Detach from the current tmux session (not supported for screen)"
+    "delete|[session_name]|Delete a tmux or screen session"
+    "new-window|[session_name] [name]|Create a new window in a tmux session"
+    "list-windows|[session_name]|List windows in a tmux session"
+    "kill-window|[session_name] [name]|Kill a window in a tmux session"
+    "rename-session|[session_name] [new_name]|Rename an existing tmux session"
+    "rename-window|[session_name] [window_index] [new_name]|Rename a window in a tmux session"
+    "split-window|[session_name] [window_index] [vertical|horizontal]|Split a pane in a tmux window"
+    "list-panes|[session_name] [window_index]|List all panes in a tmux window"
+    "kill-pane|[session_name] [window_index] [pane_index]|Kill a specific pane in a tmux window"
+    "move-window|[session_name] [window_index] [new_session]|Move a window to another tmux session"
+    "swap-window|[session_name] [window_index_1] [window_index_2]|Swap two windows in a tmux session"
+    "resize-pane|[session_name] [window_index] [pane_index] [resize_option]|Resize a pane in a tmux window"
+    "send-keys|[session_name] [window_index] [pane_index] [keys]|Send keys to a pane in a tmux window"
+  )
+
+  # Calculate maximum widths
+  for line in "${usage_data[@]}"; do
+    IFS='|' read -r cmd args desc <<< "$line"
+    [ ${#cmd} -gt $cmd_col_width ] && cmd_col_width=${#cmd}
+    [ ${#args} -gt $args_col_width ] && args_col_width=${#args}
+  done
+
+  # Add padding
+  cmd_col_width=$((cmd_col_width + padding))
+  args_col_width=$((args_col_width + padding))
+  
+  # Calculate description column width
+  desc_col_width=$((term_width - cmd_col_width - args_col_width - padding))
+
+  printf "${BLUE}Usage:${NC} txm [command] [arguments]\n"
+  printf "${BLUE}Commands:${NC}\n"
+  print_usage_line "Command" "Arguments" "Description"
+  print_usage_line "-------" "---------" "-----------"
+
+  for line in "${usage_data[@]}"; do
+    IFS='|' read -r cmd args desc <<< "$line"
+    print_usage_line "$cmd" "$args" "$desc"
+  done
+
   exit 1
 }
+
+print_usage_line() {
+  local command="$1"
+  local arguments="$2"
+  local description="$3"
+  
+  printf "${GREEN}%-${cmd_col_width}s${NC}${YELLOW}%-${args_col_width}s${NC}" "${command}" "${arguments}"
+  print_wrapped_text "${description}" $desc_col_width $((cmd_col_width + args_col_width))
+}
+
+print_wrapped_text() {
+  local text="$1"
+  local width="$2"
+  local indent="$3"
+  local line=""
+  local word=""
+  local first_line=true
+  
+  for word in $text; do
+    if [ $((${#line} + ${#word} + 1)) -le $width ] || [ -z "$line" ]; then
+      line="$line $word"
+    else
+      if [ "$first_line" = true ]; then
+        printf "%s" "${line# }"
+        first_line=false
+      else
+        echo
+        printf "%${indent}s%s" "" "${line# }"
+      fi
+      line=" $word"
+    fi
+  done
+  
+  if [ -n "$line" ]; then
+    if [ "$first_line" = true ]; then
+      printf "%s" "${line# }"
+    else
+      echo
+      printf "%${indent}s%s" "" "${line# }"
+    fi
+  fi
+  echo
+}
+
+
+
 
 # Check for tmux or screen installation
 if command -v tmux &> /dev/null; then
