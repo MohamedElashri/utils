@@ -1,7 +1,6 @@
-
 # cp_push
 
-`cp_push` is a script that automates the process of creating a new GitHub repository, initializing a local git repository, committing your code, and pushing it to GitHub.
+`cp_push` is a script that automates the process of creating a new GitHub repository, initializing a local Git repository, committing your code, and pushing it to GitHub.
 
 ## Features
 
@@ -12,46 +11,49 @@
 
 ## Installation
 
-1. **Download or clone the script**:
+1. **Create the directory for the script in `$HOME/.local/bin`:**
 
-   Create the directory for the script and place it inside:
-   ```bash
-   mkdir -p ~/utils/cp_push
-   ```
+    ```bash
+    mkdir -p $HOME/.local/bin
+    ```
 
-   Create the script file:
-   ```bash
-   nano ~/utils/cp_push/cp_push
-   ```
+2. **Download or create the script in `$HOME/.local/bin`:**
 
-   Paste the script content and save.
+    Download the script directly:
 
-   Or download the script and mv it to the locations in one command
+    ```bash
+    wget -O $HOME/.local/bin/cp_push https://github.com/MohamedElashri/utils/raw/refs/heads/main/git/cp_push/cp_push.sh
+    ```
 
-   ```bash
-   wget -P ~/utils/cp_push https://github.com/MohamedElashri/utils/raw/refs/heads/main/git/cp_push/cp_push.sh
-   ``` 
+    Or create the script manually:
 
-3. **Make the script executable**:
-   ```bash
-   chmod +x ~/utils/cp_push/cp_push
-   ```
+    ```bash
+    nano $HOME/.local/bin/cp_push
+    ```
 
-4. **(Optional) Add to PATH**:
-   To make the script accessible globally from the terminal:
-   
-   ```bash
-   echo 'export PATH="$HOME/utils/cp_push:$PATH"' >> ~/.bashrc
-   source ~/.bashrc
-   ```
+    Paste the script content into the file and save it.
 
-   or for zsh
+3. **Make the script executable:**
 
-  ```bash
-   echo 'export PATH="$HOME/utils/cp_push:$PATH"' >> ~/.zshrc
-   source ~/.zshrc
-   ```
+    ```bash
+    chmod +x $HOME/.local/bin/cp_push
+    ```
 
+4. **Ensure `$HOME/.local/bin` is in your PATH:**
+
+    Add the following line to your `~/.bashrc` or `~/.zshrc`:
+
+    ```bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
+    ```
+
+    For Zsh users:
+
+    ```bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    ```
 
 ## Usage
 
@@ -64,37 +66,44 @@ cp_push <repo-name> [--private]
 - `<repo-name>`: **(Required)** The name of the new GitHub repository.
 - `--private`: **(Optional)** Makes the repository private. By default, the repository is public.
 
-### Example
+### Examples
 
-1. **Create and push to a public repository**:
-   ```bash
-   cp_push my-new-repo
-   ```
+1. **Create and push to a public repository:**
 
-2. **Create and push to a private repository**:
-   ```bash
-   cp_push my-new-repo --private
-   ```
+    ```bash
+    cp_push my-new-repo
+    ```
+
+2. **Create and push to a private repository:**
+
+    ```bash
+    cp_push my-new-repo --private
+    ```
 
 ## Dependencies
 
 This script depends on the following:
 
-- **Git**: Make sure git is installed on your system.
-- **GitHub CLI (`gh`)**: Install the GitHub CLI to use this script. You can install it using the following commands:
+- **Git**: Ensure Git is installed on your system.
+- **GitHub CLI (`gh`)**: Install the GitHub CLI to use this script. Use the following commands:
 
     For Linux:
+
     ```bash
     sudo apt install gh
     ```
 
     For macOS using Homebrew:
+
     ```bash
     brew install gh
     ```
 
     For Windows using `winget`:
+
     ```bash
     winget install GitHub.cli
     ```
-I didn't test this for windows because who uses windows in HEP?
+
+> I didn’t test this for Windows because… who uses Windows in HEP?
+
