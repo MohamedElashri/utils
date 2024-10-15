@@ -1,0 +1,201 @@
+#!/bin/bash
+
+# Path: $HOME/.local/bin/txm
+
+# Colors for logging
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+  echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warning() {
+  echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Display usage information
+usage() {
+  echo -e "${BLUE}Usage:${NC} txm [command] [arguments]"
+  echo -e "${BLUE}Commands:${NC}"
+  echo -e "  ${GREEN}create [session_name]${NC}                       Create a new tmux or screen session"
+  echo -e "  ${GREEN}list${NC}                                    List all tmux or screen sessions"
+  echo -e "  ${GREEN}attach [session_name]${NC}                   Attach to a tmux or screen session"
+  echo -e "  ${GREEN}detach${NC}                                  Detach from the current tmux or screen session"
+  echo -e "  ${GREEN}delete [session_name]${NC}                   Delete a tmux or screen session"
+  echo -e "  ${GREEN}new-window [session_name] [name]${NC}        Create a new window in a tmux or screen session"
+  echo -e "  ${GREEN}list-windows [session_name]${NC}             List windows in a tmux or screen session"
+  echo -e "  ${GREEN}kill-window [session_name] [name]${NC}       Kill a window in a tmux or screen session"
+  echo -e "  ${GREEN}rename-session [session_name] [new_name]${NC} Rename an existing tmux session"
+  echo -e "  ${GREEN}rename-window [session_name] [window_index] [new_name]${NC} Rename a window in a tmux session"
+  echo -e "  ${GREEN}split-window [session_name] [window_index] [vertical|horizontal]${NC} Split a window pane in tmux"
+  echo -e "  ${GREEN}list-panes [session_name] [window_index]${NC} List all panes in a tmux window"
+  echo -e "  ${GREEN}kill-pane [session_name] [window_index] [pane_index]${NC} Kill a specific pane in tmux"
+  echo -e "  ${GREEN}move-window [session_name] [window_index] [new_session]${NC} Move a window to another tmux session"
+  echo -e "  ${GREEN}swap-window [session_name] [window_index_1] [window_index_2]${NC} Swap two windows in a tmux session"
+  echo -e "  ${GREEN}resize-pane [session_name] [window_index] [pane_index] [resize_option]${NC} Resize a pane in tmux"
+  echo -e "  ${GREEN}send-keys [session_name] [window_index] [pane_index] [keys]${NC} Send keys to a pane in tmux"
+  exit 1
+}
+
+# Check for tmux or screen installation
+if command -v tmux &> /dev/null; then
+  TMUX_AVAILABLE=true
+else
+  log_warning "tmux is not installed. Falling back to screen."
+  TMUX_AVAILABLE=false
+  if ! command -v screen &> /dev/null; then
+    log_error "Neither tmux nor screen is installed. Please install one of them and try again."
+    exit 1
+  fi
+fi
+
+# Main script logic
+case "$1" in
+  -h|--help)
+    usage
+    ;;
+
+  create)
+    if [ -z "$2" ]; then
+      log_error "Please specify a session name."
+      usage
+    fi
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if tmux new-session -d -s "$2" 2>/dev/null; then
+        log_info "Session '$2' created with tmux."
+      else
+        log_error "Failed to create tmux session '$2'. It may already exist."
+      fi
+    else
+      if screen -S "$2" -dm; then
+        log_info "Session '$2' created with screen."
+      else
+        log_error "Failed to create screen session '$2'. It may already exist."
+      fi
+    fi
+    ;;
+
+  list)
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if ! tmux list-sessions 2>/dev/null; then
+        log_warning "No tmux sessions found."
+      fi
+    else
+      if ! screen -ls 2>/dev/null; then
+        log_warning "No screen sessions found."
+      fi
+    fi
+    ;;
+
+  attach)
+    if [ -z "$2" ]; then
+      log_error "Please specify a session name to attach."
+      usage
+    fi
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if tmux attach-session -t "$2" 2>/dev/null; then
+        log_info "Attached to tmux session '$2'."
+      else
+        log_error "Failed to attach to tmux session '$2'. It may not exist."
+      fi
+    else
+      if screen -r "$2"; then
+        log_info "Attached to screen session '$2'."
+      else
+        log_error "Failed to attach to screen session '$2'. It may not exist."
+      fi
+    fi
+    ;;
+
+  detach)
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if tmux detach-client 2>/dev/null; then
+        log_info "Detached from the current tmux session."
+      else
+        log_error "Failed to detach. Are you in a tmux session?"
+      fi
+    else
+      log_warning "Detach is not supported for screen sessions from this script. Use Ctrl-a d to detach."
+    fi
+    ;;
+
+  delete)
+    if [ -z "$2" ]; then
+      log_error "Please specify a session name to delete."
+      usage
+    fi
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if tmux kill-session -t "$2" 2>/dev/null; then
+        log_info "tmux session '$2' deleted."
+      else
+        log_error "Failed to delete tmux session '$2'. It may not exist."
+      fi
+    else
+      if screen -S "$2" -X quit; then
+        log_info "screen session '$2' deleted."
+      else
+        log_error "Failed to delete screen session '$2'. It may not exist."
+      fi
+    fi
+    ;;
+
+  new-window)
+    if [ -z "$2" ] || [ -z "$3" ]; then
+      log_error "Please specify both session name and window name."
+      usage
+    fi
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if tmux new-window -t "$2" -n "$3" 2>/dev/null; then
+        log_info "Window '$3' created in tmux session '$2'."
+      else
+        log_error "Failed to create window '$3' in tmux session '$2'."
+      fi
+    else
+      log_warning "Creating new windows is not supported for screen sessions from this script."
+    fi
+    ;;
+
+  list-windows)
+    if [ -z "$2" ]; then
+      log_error "Please specify a session name to list windows."
+      usage
+    fi
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if ! tmux list-windows -t "$2" 2>/dev/null; then
+        log_warning "No windows found in tmux session '$2'."
+      fi
+    else
+      log_warning "Listing windows is not supported for screen sessions from this script."
+    fi
+    ;;
+
+  kill-window)
+    if [ -z "$2" ] || [ -z "$3" ]; then
+      log_error "Please specify both session name and window name to kill."
+      usage
+    fi
+    if [ "$TMUX_AVAILABLE" = true ]; then
+      if tmux kill-window -t "$2":"$3" 2>/dev/null; then
+        log_info "Window '$3' in tmux session '$2' deleted."
+      else
+        log_error "Failed to delete window '$3' in tmux session '$2'."
+      fi
+    else
+      log_warning "Killing windows is not supported for screen sessions from this script."
+    fi
+    ;;
+
+  *)
+    log_error "Invalid command."
+    usage
+    ;;
+esac
