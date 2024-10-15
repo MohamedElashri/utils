@@ -7,6 +7,7 @@
 To install `txm`, simply place the script in your `$HOME/.local/bin` directory, or any directory in your `$PATH`.
 
 ```bash
+wget https://github.com/MohamedElashri/utils/raw/refs/heads/main/remote/tmux-remote/txm/txm
 mkdir -p $HOME/.local/bin
 cp txm $HOME/.local/bin/txm
 chmod +x $HOME/.local/bin/txm
