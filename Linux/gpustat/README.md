@@ -6,7 +6,7 @@ A Poor's man command-line tool for monitoring NVIDIA GPU stats and processes.
 
 1. Download the script:
    ```
-   curl -o ~/.local/bin/gpustat https://github.com/MohamedElashri/utils/raw/refs/heads/main/linux/gpustat/gpustat
+   curl -o ~/.local/bin/gpustat https://github.com/MohamedElashri/utils/raw/refs/heads/main/Linux/gpustat/gpustat
    ```
 
 2. Make the script executable:
