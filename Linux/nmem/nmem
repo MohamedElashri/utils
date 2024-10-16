@@ -1,0 +1,161 @@
+#!/bin/bash
+
+# ANSI Colors
+YELLOW="\033[1;33m"
+BLUE="\033[1;34m"
+RED="\033[1;31m"
+NC="\033[0m" # No Color
+
+# Display usage information
+usage() {
+    echo "Usage: nmem [OPTION]..."
+    echo "Display memory usage information, similar to free."
+    echo "Example: nmem -m --watch"
+    echo ""
+    echo "Options:"
+    echo "  -b        show output in bytes"
+    echo "  -k        show output in kilobytes"
+    echo "  -m        show output in megabytes"
+    echo "  -g        show output in gigabytes"
+    echo "  --help    display this help and exit"
+    echo "  --watch   continuously update the display every second"
+    echo ""
+    echo "Without any options, the output is shown in human-readable format by default."
+}
+
+# Helper function to convert memory from KB based on the flag
+format_memory() {
+    local kb=$1
+    case "$unit_flag" in
+        -b) # bytes
+            local bytes=$((kb * 1024))
+            printf "%8d B " $bytes
+            ;;
+        -k) # kilobytes
+            printf "%8d KB" $kb
+            ;;
+        -m) # megabytes
+            local mb=$((kb / 1024))
+            printf "%8d MB" $mb
+            ;;
+        -g) # gigabytes
+            local gb=$((kb / 1024 / 1024))
+            printf "%8d GB" $gb
+            ;;
+        *) # human-readable
+            local converted=$kb
+            local unit="KB"
+            if [[ $kb -ge $((1024 * 1024)) ]]; then
+                converted=$((kb / 1024 / 1024))
+                unit="GB"
+            elif [[ $kb -ge 1024 ]]; then
+                converted=$((kb / 1024))
+                unit="MB"
+            fi
+            printf "%8d %s" $converted $unit
+            ;;
+    esac
+}
+
+# Function to print memory table
+print_memory_table() {
+    # Clear screen if in watch mode
+    [[ $watch_mode == true ]] && clear
+
+    # Check if /proc/meminfo is accessible
+    if [[ ! -r /proc/meminfo ]]; then
+        echo -e "${RED}Error: /proc/meminfo is not accessible. Make sure you are running this script on a compatible Linux system.${NC}"
+        exit 1
+    fi
+
+    # Read data from /proc/meminfo
+    declare -A meminfo
+    while IFS=":" read -r key value; do
+        # Only process known keys to avoid errors
+        case "$key" in
+            MemTotal|MemFree|Buffers|Cached|SwapTotal|SwapFree|Shmem|MemAvailable)
+                meminfo["$key"]=$(echo $value | tr -dc '0-9')
+                ;;
+        esac
+    done < /proc/meminfo
+
+    # Validate expected data
+    if [[ -z ${meminfo[MemTotal]} || -z ${meminfo[MemFree]} || -z ${meminfo[SwapTotal]} || -z ${meminfo[SwapFree]} ]]; then
+        echo -e "${RED}Error: Failed to read memory information from /proc/meminfo.${NC}"
+        exit 1
+    fi
+
+    # Calculate used memory and swap
+    local mem_used=$((meminfo[MemTotal] - meminfo[MemFree] - meminfo[Buffers] - meminfo[Cached]))
+    local swap_used=$((meminfo[SwapTotal] - meminfo[SwapFree]))
+
+    echo -e "${YELLOW}+----------+------------+------------+------------+------------+------------+------------+-------------+${NC}"
+    echo -e "|${BLUE}   Metric  |    Total   |    Used    |    Free    |  Buffers   |   Cached   |   Shared   | Available  ${NC}|"
+    echo -e "${YELLOW}+----------+------------+------------+------------+------------+------------+------------+-------------+${NC}"
+    
+    # Memory row
+    printf "| Memory    |"
+    format_memory ${meminfo[MemTotal]}
+    printf " |"
+    format_memory $mem_used
+    printf " |"
+    format_memory ${meminfo[MemFree]}
+    printf " |"
+    format_memory ${meminfo[Buffers]}
+    printf " |"
+    format_memory ${meminfo[Cached]}
+    printf " |"
+    format_memory ${meminfo[Shmem]}
+    printf " |"
+    format_memory ${meminfo[MemAvailable]}
+    echo " |"
+
+    # Swap row
+    echo -e "${YELLOW}+----------+------------+------------+------------+------------+------------+------------+-------------+${NC}"
+    printf "| Swap     |"
+    format_memory ${meminfo[SwapTotal]}
+    printf " |"
+    format_memory $swap_used
+    printf " |"
+    format_memory ${meminfo[SwapFree]}
+    printf " |            |            |            |           |"
+    echo " |"
+    echo -e "${YELLOW}+----------+------------+------------+------------+------------+------------+------------+-------------+${NC}"
+}
+
+# Main script execution
+unit_flag="-h" # default to human-readable
+
+# Parse command-line options
+while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
+  -b | -k | -m | -g )
+    unit_flag=$1
+    ;;
+  --watch )
+    watch_mode=true
+    ;;
+  --help )
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Error: Unsupported flag $1" >&2
+    usage
+    exit 1
+    ;;
+esac; shift; done
+
+# Function to continuously update the display
+update_loop() {
+    while true; do
+        print_memory_table
+        # Delay for 1 second before refreshing
+        sleep 1
+    done
+}
+
+if [[ $watch_mode == true ]]; then
+    update_loop
+else
+    print_memory_table
+fi
