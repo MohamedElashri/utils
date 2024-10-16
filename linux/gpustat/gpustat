@@ -1,0 +1,281 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Color Definitions
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+RED="\033[0;31m"
+BLUE="\033[0;34m"
+CYAN="\033[0;36m"
+NC="\033[0m" # No Color
+
+# Default options
+COLOR=true
+NO_COLOR=false
+WATCH_MODE=false
+INTERVAL=1
+DEBUG=false
+SHOW_PROCESSES=false
+SELECTED_GPUS=""
+SORT_BY=""
+SORT_ORDER="descending"
+
+# Usage Function
+usage() {
+  cat << EOF
+Usage: $(basename "$0") [options]
+
+Options:
+  -h, --help                Show this help message and exit.
+  -N, --no-color            Suppress colored output.
+  -w, --watch [INTERVAL]    Run in watch mode, updating every INTERVAL seconds (default: 1).
+  -d, --debug               Show debug information.
+  -p, --process             Show processes running on GPUs.
+  -g, --gpus GPUS           Select specific GPUs to monitor (comma-separated indices).
+  -s, --sort FIELD          Sort GPUs by FIELD (memory, temperature, or utilization).
+  -r, --reverse             Reverse the sort order.
+EOF
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help) usage; exit 0 ;;
+    -N|--no-color) NO_COLOR=true; COLOR=false ;;
+    -w|--watch) 
+      WATCH_MODE=true
+      if [[ $# -gt 1 && $2 =~ ^[0-9]+$ ]]; then
+        INTERVAL=$2
+        shift
+      fi
+      ;;
+    -d|--debug) DEBUG=true ;;
+    -p|--process) SHOW_PROCESSES=true ;;
+    -g|--gpus) SELECTED_GPUS=$2; shift ;;
+    -s|--sort) SORT_BY=$2; shift ;;
+    -r|--reverse) SORT_ORDER="ascending" ;;
+    *) echo "Unknown option: $1" >&2; exit 1 ;;
+  esac
+  shift
+done
+
+# Function to handle color output
+get_color() {
+  if [ "$NO_COLOR" = true ]; then
+    echo ""
+  else
+    case $1 in
+      green) echo "$GREEN" ;;
+      yellow) echo "$YELLOW" ;;
+      red) echo "$RED" ;;
+      blue) echo "$BLUE" ;;
+      nc) echo "$NC" ;;
+      *) echo "" ;;
+    esac
+  fi
+}
+
+print_gpu_stats() {
+  local query="index,name,memory.total,memory.used,memory.free,temperature.gpu,utilization.gpu"
+  local gpu_select=""
+  
+  if [ -n "$SELECTED_GPUS" ]; then
+    gpu_select="--id=$(echo $SELECTED_GPUS | tr ',' ',' | sed 's/,$//')"
+  fi
+
+  # Get GPU data and process it
+  nvidia-smi $gpu_select --query-gpu="$query" --format=csv,noheader,nounits |
+  awk -F', ' -v green="$(get_color green)" -v yellow="$(get_color yellow)" -v red="$(get_color red)" -v blue="$(get_color blue)" -v nc="$(get_color nc)" \
+      -v sort_by="$SORT_BY" -v sort_order="$SORT_ORDER" '
+    function color(value, threshold1, threshold2) {
+      if (value < threshold1) return green value nc
+      else if (value < threshold2) return yellow value nc
+      else return red value nc
+    }
+    function to_gb(mb) {
+      return mb >= 1024 ? sprintf("%.1f GB", mb / 1024) : sprintf("%d MB", mb)
+    }
+    function repeat(str, n) {
+      result = ""
+      for (i = 0; i < n; i++) result = result str
+      return result
+    }
+    BEGIN {
+      OFS = "|"
+      cols["GPU"] = 3
+      cols["Name"] = 20
+      cols["Memory Usage"] = 17
+      cols["Temperature"] = 11
+      cols["Utilization"] = 11
+    }
+    {
+      gpu[NR] = sprintf("%3s", $1)
+      name[NR] = substr($2, 1, cols["Name"])
+      total_mem = $3
+      used_mem = $4
+      memory_usage = used_mem / total_mem * 100
+      memory[NR] = sprintf("%s / %s", to_gb(used_mem), to_gb(total_mem))
+      temp[NR] = sprintf("%5s°C", $6)
+      util[NR] = sprintf("%3s%%", $7)
+      
+      if (length(memory[NR]) > cols["Memory Usage"]) cols["Memory Usage"] = length(memory[NR])
+
+      # Store values for sorting
+      sort_values[NR] = (sort_by == "memory") ? memory_usage : \
+                        (sort_by == "temperature") ? $6 : \
+                        (sort_by == "utilization") ? $7 : NR
+    }
+    END {
+      # Sort if required
+      if (sort_by != "") {
+        n = asorti(sort_values, sorted_indices, sort_order == "ascending" ? "@val_num_asc" : "@val_num_desc")
+      } else {
+        for (i = 1; i <= NR; i++) sorted_indices[i] = i
+      }
+
+      # Print header
+      border = "+"
+      for (col in cols) {
+        border = border "-" repeat("-", cols[col]) "-+"
+      }
+      print border
+
+      printf "| %s%-*s%s | %s%-*s%s | %s%-*s%s | %s%-*s%s | %s%-*s%s |\n", \
+        blue, cols["GPU"], "GPU", nc, \
+        blue, cols["Name"], "Name", nc, \
+        blue, cols["Memory Usage"], "Memory Usage", nc, \
+        blue, cols["Temperature"], "Temperature", nc, \
+        blue, cols["Utilization"], "Utilization", nc
+      
+      print border
+      
+      # Print data rows
+      total_used_mem = 0
+      total_mem = 0
+      for (i = 1; i <= NR; i++) {
+        idx = sorted_indices[i]
+        split(memory[idx], mem_parts, " / ")
+        total_used_mem += strtonum(gensub(/^([0-9.]+).*$/, "\\1", 1, mem_parts[1]))
+        total_mem += strtonum(gensub(/^([0-9.]+).*$/, "\\1", 1, mem_parts[2]))
+        printf "| %*s | %-*s | %*s | %*s | %*s |\n", \
+          cols["GPU"], gpu[idx], \
+          cols["Name"], name[idx], \
+          cols["Memory Usage"], color(sprintf("%-*s", cols["Memory Usage"], memory[idx]), "5.0 GB", "8.0 GB"), \
+          cols["Temperature"], color(sprintf("%*s", cols["Temperature"], temp[idx]), "50", "70"), \
+          cols["Utilization"], color(sprintf("%*s", cols["Utilization"], util[idx]), "50", "80")
+      }
+      
+      print border
+
+      # Print summary
+      printf "Total Memory Usage: %.1f GB / %.1f GB (%.1f%%)\n", \
+        total_used_mem, total_mem, (total_used_mem / total_mem * 100)
+    }
+  '
+}
+
+print_gpu_processes() {
+  echo -e "\n${BLUE}Processes running on GPUs:${NC}"
+  print_and_execute nvidia-smi --query-compute-apps=gpu_bus_id,pid,used_memory,process_name --format=csv,noheader,nounits |
+  awk -F', ' -v green="$(get_color green)" -v yellow="$(get_color yellow)" -v red="$(get_color red)" -v blue="$(get_color blue)" -v nc="$(get_color nc)" '
+    function repeat(str, n) {
+      result = ""
+      for (i = 0; i < n; i++) result = result str
+      return result
+    }
+    function color_memory(value) {
+      if (value < 1000) return green value nc
+      else if (value < 4000) return yellow value nc
+      else return red value nc
+    }
+    function trim_process_name(name, max_length) {
+      if (length(name) <= max_length) return name
+      split(name, parts, "/")
+      n = length(parts)
+      if (n <= 3) return name
+      result = parts[n-2] "/" parts[n-1] "/" parts[n]
+      if (length(result) > max_length) {
+        return ".../" substr(result, length(result) - max_length + 4)
+      }
+      return ".../" result
+    }
+    BEGIN {
+      OFS = "|"
+      cols["GPU"] = 3
+      cols["PID"] = 7
+      cols["Memory Usage"] = 12
+      cols["Process Name"] = 35
+      cols["User"] = 8
+    }
+    {
+      gpu_bus_id = $1
+      pid = $2
+      memory = $3
+      process_name = $4
+      
+      # Get GPU index and user
+      cmd = sprintf("nvidia-smi -q -i %s | grep \"Minor Number\" | awk '\''{print $NF}'\''", gpu_bus_id)
+      cmd | getline gpu_index
+      close(cmd)
+      
+      cmd = "ps -p " pid " -o user= 2>/dev/null"
+      cmd | getline user
+      close(cmd)
+      
+      if (user == "") user = "N/A"
+      
+      data[NR]["gpu"] = sprintf("%3s", gpu_index)
+      data[NR]["pid"] = sprintf("%7s", pid)
+      data[NR]["memory"] = sprintf("%9s", memory)
+      data[NR]["process"] = trim_process_name(process_name, cols["Process Name"])
+      data[NR]["user"] = substr(user, 1, cols["User"])
+    }
+    END {
+      # Print header
+      border = "+"
+      for (col in cols) {
+        border = border "-" repeat("-", cols[col]) "-+"
+      }
+      print border
+      
+      printf "| %s%-*s%s | %s%-*s%s | %s%-*s%s | %s%-*s%s | %s%-*s%s |\n", \
+        blue, cols["GPU"], "GPU", nc, \
+        blue, cols["PID"], "PID", nc, \
+        blue, cols["Memory Usage"], "Memory Usage", nc, \
+        blue, cols["Process Name"], "Process Name", nc, \
+        blue, cols["User"], "User", nc
+      
+      print border
+      
+      # Print data rows
+      for (i = 1; i <= NR; i++) {
+        printf "| %*s | %*s | %s MB | %-*s | %-*s |\n", \
+          cols["GPU"], data[i]["gpu"], \
+          cols["PID"], data[i]["pid"], \
+          color_memory(sprintf("%*s", cols["Memory Usage"] - 3, data[i]["memory"])), \
+          cols["Process Name"], data[i]["process"], \
+          cols["User"], data[i]["user"]
+      }
+      
+      print border
+    }
+  '
+}
+
+# Main execution
+if [ "$WATCH_MODE" = true ]; then
+  while true; do
+    clear
+    print_gpu_stats
+    if [ "$SHOW_PROCESSES" = true ]; then
+      print_gpu_processes
+    fi
+    sleep $INTERVAL
+  done
+else
+  print_gpu_stats
+  if [ "$SHOW_PROCESSES" = true ]; then
+    print_gpu_processes
+  fi
+fi
