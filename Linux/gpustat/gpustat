@@ -60,6 +60,13 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+print_and_execute() {
+  if [ "$DEBUG" = true ]; then
+    echo -e "${GREEN}+ $@${NC}" >&2
+  fi
+  "$@"
+}
+
 # Function to handle color output
 get_color() {
   if [ "$NO_COLOR" = true ]; then
