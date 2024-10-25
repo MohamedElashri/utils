@@ -1,0 +1,214 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Colors for logging
+green="\033[0;32m"
+yellow="\033[1;33m"
+red="\033[0;31m"
+cyan="\033[0;36m"
+nc="\033[0m" # No Color
+
+# Log functions
+log_info() {
+  if [[ "${DEBUG:-}" == "true" ]]; then
+    echo -e "${green}[INFO]${nc} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+  fi
+}
+
+log_warning() {
+  if [[ "${DEBUG:-}" == "true" ]]; then
+    echo -e "${yellow}[WARNING]${nc} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+  fi
+}
+
+log_error() {
+  echo -e "${red}[ERROR]${nc} $(date '+%Y-%m-%d %H:%M:%S') - $1" >&2
+}
+
+# Command execution function
+print_and_execute() {
+  echo -e "${green}+ $@${nc}" >&2
+  "$@"
+}
+
+# Usage function
+usage() {
+  cat << EOF
+Usage: $(basename "$0") [options] [directory]
+
+Options:
+  -L <depth>          Set the maximum display depth of the directory tree.
+  -a, --all           Include hidden files in the output.
+  -o <file>           Redirect output to the specified file.
+  --ext <extension>   Filter files by the specified extension.
+  -e, --exclude <pattern> Exclude files or directories matching the specified regex pattern.
+  -i, --include <pattern> Include only files or directories matching the specified regex pattern.
+  -c, --count         Display a summary of the total number of files and directories.
+  -h, --help          Show this help message and exit.
+
+Examples:
+  $(basename "$0") -L 2 /path/to/directory
+  $(basename "$0") -a
+  $(basename "$0") -o output.txt
+  $(basename "$0") --ext txt
+  $(basename "$0") -e '.*\.log'
+  $(basename "$0") -c
+EOF
+}
+
+# Default values
+depth=-1
+directory="."
+show_all=false
+output_file=""
+extension=""
+exclude_pattern=""
+include_pattern=""
+count_summary=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -L)
+      if [[ -n ${2:-} && $2 =~ ^[0-9]+$ ]]; then
+        depth=$2
+        shift 2
+      else
+        log_error "Invalid or missing depth value for -L option."
+        exit 1
+      fi
+      ;;
+    -a|--all)
+      show_all=true
+      shift
+      ;;
+    -o)
+      if [[ -n ${2:-} ]]; then
+        output_file=$2
+        shift 2
+      else
+        log_error "Invalid or missing value for -o option."
+        exit 1
+      fi
+      ;;
+    --ext)
+      if [[ -n ${2:-} ]]; then
+        extension=$2
+        shift 2
+      else
+        log_error "Invalid or missing value for --ext option."
+        exit 1
+      fi
+      ;;
+    -e|--exclude)
+      if [[ -n ${2:-} ]]; then
+        exclude_pattern=$2
+        shift 2
+      else
+        log_error "Invalid or missing value for -e/--exclude option."
+        exit 1
+      fi
+      ;;
+    -i|--include)
+      if [[ -n ${2:-} ]]; then
+        include_pattern=$2
+        shift 2
+      else
+        log_error "Invalid or missing value for -i/--include option."
+        exit 1
+      fi
+      ;;
+    -c|--count)
+      count_summary=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      directory=$1
+      shift
+      ;;
+  esac
+done
+
+# Counters for directories and files
+dir_count=0
+file_count=0
+
+# Function to print tree-like structure
+print_tree() {
+  local current_dir="$1"
+  local current_depth="$2"
+  local prefix="$3"
+
+  # Check if depth limit is reached
+  if [[ $depth -ge 0 && $current_depth -gt $depth ]]; then
+    return
+  fi
+
+  # List directory contents
+  local entries
+  if [[ "$show_all" == "true" ]]; then
+    entries=$(ls -A "$current_dir" 2>/dev/null || true)
+  else
+    entries=$(ls "$current_dir" 2>/dev/null || true)
+  fi
+
+  local dir_entries=()
+  local file_entries=()
+
+  for entry in $entries; do
+    local path="$current_dir/$entry"
+    # Apply include and exclude filters
+    if [[ -n "$exclude_pattern" && "$entry" =~ $exclude_pattern ]]; then
+      continue
+    fi
+    if [[ -n "$include_pattern" && ! "$entry" =~ $include_pattern ]]; then
+      continue
+    fi
+
+    if [[ -d "$path" ]]; then
+      dir_entries+=("$entry")
+      ((dir_count++))
+    elif [[ -z "$extension" || "$entry" == *.$extension ]]; then
+      file_entries+=("$entry")
+      ((file_count++))
+    fi
+  done
+
+  # Print directories and files normally
+  for entry in "${dir_entries[@]}"; do
+    echo -e "${prefix}${yellow}$entry/${nc}"
+    print_tree "$current_dir/$entry" $((current_depth + 1)) "$prefix  "
+  done
+  for entry in "${file_entries[@]}"; do
+    if [[ -L "$current_dir/$entry" ]]; then
+      target=$(readlink "$current_dir/$entry")
+      echo -e "${prefix}${cyan}$entry${nc} -> ${target}"
+    else
+      echo -e "${prefix}${green}$entry${nc}"
+    fi
+  done
+}
+
+# Redirect output to file if specified
+if [[ -n "$output_file" ]]; then
+  exec > "$output_file"
+fi
+
+# Start printing the tree
+if [[ -d $directory ]]; then
+  log_info "Printing tree structure for: $directory"
+  print_tree "$directory" 1 ""
+  if [[ "$count_summary" == "true" ]]; then
+    echo -e "\n${green}[SUMMARY]${nc} Directories: $dir_count, Files: $file_count"
+  fi
+else
+  log_error "$directory is not a valid directory."
+  exit 1
+fi
+
+log_info "Script completed successfully."
