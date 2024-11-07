@@ -24,33 +24,21 @@ log_error() {
 # Progress Reporting with Command Execution
 print_and_execute() {
   echo -e "${green}+ $@${nc}" >&2
-  "$@"
+  eval "$@"
 }
-
-# Platform-Specific Adaptation for Timeout
-TIMEOUT=""
-if [ "$(uname -s)" == "Linux" ]; then
-  TIMEOUT="timeout -v"
-elif [ "$(uname -s)" == "Darwin" ]; then
-  if [ -x "$(command -v gtimeout)" ]; then
-    TIMEOUT="gtimeout -v"
-  else
-    log_warning "gtimeout not available. Install with 'brew install coreutils'."
-  fi
-fi
 
 # Usage Instructions
 usage() {
   cat << EOF
-Usage: $(basename "$0") [options] <command>
+Usage: $(basename "$0") [options] -- <command>
 
 Options:
   --help                Show this help message and exit.
-  -o, --output FILE     Specify output file name and location (default: output.log).
+  -l, --log-output FILE Specify log output file name and location (default: output.log).
 
 Examples:
-  $(basename "$0") "ls -la"
-  $(basename "$0") -o custom_output.log "echo Hello, World!"
+  $(basename "$0") -- "ls -la"
+  $(basename "$0") -l custom_log_output.log -- "echo Hello, World!"
 EOF
 }
 
@@ -61,37 +49,44 @@ if [[ $# -eq 0 ]]; then
 fi
 
 # Parse Arguments
-output_file="output.log"
+log_output_file="output.log"
 while [[ $# -gt 0 ]]; do
   case $1 in
     --help)
       usage
       exit 0
       ;;
-    -o|--output)
+    -l|--log-output)
       if [[ -n ${2-} ]]; then
-        output_file="$2"
+        log_output_file="$2"
         shift
       else
-        log_error "--output requires a file name."
+        log_error "--log-output requires a file name."
         exit 1
       fi
       ;;
-    *)
-      command="$1"
+    --)
       shift
       break
+      ;;
+    *)
+      log_error "Unknown option: $1"
+      usage
+      exit 1
       ;;
   esac
   shift
 done
 
+# Capture the Entire Command as a Single String
+command="$*"
+
 # Execute Command and Redirect Output
-if [[ -z ${command-} ]]; then
+if [[ -z "$command" ]]; then
   log_error "No command provided to execute. Use --help for usage instructions."
   exit 1
 fi
 
 log_info "Executing command: $command"
-print_and_execute $command > "$output_file" 2>&1
-log_info "Command output saved to $output_file"
+print_and_execute "$command" > "$log_output_file" 2>&1
+log_info "Command output saved to $log_output_file"
