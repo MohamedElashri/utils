@@ -11,14 +11,6 @@ This script automates the process of creating a new feature branch from the `mai
 5. **Push (Optional)**: If the `--push` flag is set, the branch is pushed to the remote repository.
 6. **Checkout Back (Optional)**: If the `--checkout-back` flag is set, the script checks out back to the `main` or `master` branch, depending on which one exists.
 
-## Features
-
-- **Automatic Branch Creation**: Stash changes, create a new branch, and apply changes.
-- **Explicit Branch Name**: Requires the user to specify the new branch name using `--branch` or `-b`.
-- **Explicit Commit Message**: Requires the user to specify the commit message using `--message` or `-m`.
-- **Optional Push**: Pushes the new branch to the remote repository only when the `--push` or `-p` option is provided.
-- **Checkout Back**: Optionally checkout back to `main` or `master` branch using `--checkout-back` or `-c`.
-- **Help Option**: Provides a help message detailing usage with `--help` or `-h`.
 
 ## Installation
 
