@@ -2,13 +2,6 @@
 
 `cp_push` is a script that automates the process of creating a new GitHub repository, initializing a local Git repository, committing your code, and pushing it to GitHub.
 
-## Features
-
-- **Repository Creation**: Automatically creates a new GitHub repository using the GitHub CLI (`gh`).
-- **Initial Commit**: Commits the current state of your code with an initial commit message.
-- **Privacy Options**: You can specify whether the repository should be public or private.
-- **Automatic Push**: Pushes your code to the newly created GitHub repository.
-
 ## Installation
 
 1. **Create the directory for the script in `$HOME/.local/bin`:**
