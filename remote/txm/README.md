@@ -7,8 +7,7 @@
 To install `txm`, you can run the following command to download, install, and make it executable in one line:
 
 ```bash
-[[ ! -d "$HOME/.local/bin" ]] && mkdir -p "$HOME/.local/bin"
-wget -qO "$HOME/.local/bin/txm" "https://github.com/MohamedElashri/utils/raw/refs/heads/main/remote/txm/txm" && chmod +x "$HOME/.local/bin/txm"
+[[ ! -d "$HOME/.local/bin" ]] && mkdir -p "$HOME/.local/bin"; wget -qO "$HOME/.local/bin/txm" "https://github.com/MohamedElashri/utils/raw/refs/heads/main/remote/txm/txm" && chmod +x "$HOME/.local/bin/txm"
 ```
 
 Ensure `$HOME/.local/bin` is in your `$PATH` for easy access.
