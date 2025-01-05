@@ -10,7 +10,11 @@ To install `txm`, you can run the following command to download, install, and ma
 [[ ! -d "$HOME/.local/bin" ]] && mkdir -p "$HOME/.local/bin"; wget -qO "$HOME/.local/bin/txm" "https://github.com/MohamedElashri/utils/raw/refs/heads/main/remote/txm/txm" && chmod +x "$HOME/.local/bin/txm"
 ```
 
-Ensure `$HOME/.local/bin` is in your `$PATH` for easy access.
+Ensure `$HOME/.local/bin` is in your `$PATH` for easy access. This can be done by adding it to `~/.bashrc` or `~/.zshrc` as 
+
+```
+export PATH="$HOME/.local/bin:$PATH"
+```
 
 ## Usage
 
