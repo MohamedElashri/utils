@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# Colors for better readability
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Print types menu
+print_types() {
+    echo -e "${BLUE}Available commit types:${NC}"
+    echo "1. feat     - New feature"
+    echo "2. fix      - Bug fix"
+    echo "3. docs     - Documentation changes"
+    echo "4. style    - Code style changes"
+    echo "5. refactor - Code refactoring"
+    echo "6. test     - Adding or modifying tests"
+    echo "7. chore    - Maintenance tasks"
+    echo "8. perf     - Performance improvements"
+    echo "9. ci       - CI/CD related changes"
+    echo "10. build   - Build system or dependencies"
+}
+
+# Map number to type
+get_type() {
+    case $1 in
+        1) echo "feat";;
+        2) echo "fix";;
+        3) echo "docs";;
+        4) echo "style";;
+        5) echo "refactor";;
+        6) echo "test";;
+        7) echo "chore";;
+        8) echo "perf";;
+        9) echo "ci";;
+        10) echo "build";;
+        *) echo "";;
+    esac
+}
+
+# Main script
+echo -e "${GREEN}Interactive Conventional Commit Message Generator${NC}"
+echo "------------------------------------------------"
+
+# 1. Get commit type
+print_types
+while true; do
+    read -p "Enter the number for commit type (1-10): " type_num
+    type=$(get_type $type_num)
+    if [ ! -z "$type" ]; then
+        break
+    fi
+    echo "Invalid selection. Please try again."
+done
+
+# 2. Get scope (optional)
+read -p "Enter scope (press Enter to skip): " scope
+
+# 3. Get description
+while true; do
+    read -p "Enter commit description: " description
+    if [ ! -z "$description" ]; then
+        break
+    fi
+    echo "Description cannot be empty. Please try again."
+done
+
+# 4. Get body (optional)
+read -p "Enter commit body (press Enter to skip): " body
+
+# Construct the commit message
+commit_msg="$type"
+if [ ! -z "$scope" ]; then
+    commit_msg="$commit_msg($scope)"
+fi
+commit_msg="$commit_msg: $description"
+
+if [ ! -z "$body" ]; then
+    commit_msg="$commit_msg\n\n$body"
+fi
+
+# Add footer
+commit_msg="$commit_msg\n\nAuthored-by: Mohamed Elashri <mail@elashri.com>"
+
+# Display the final message
+echo -e "\n${GREEN}Generated Commit Message:${NC}"
+echo -e "$commit_msg"
+
+# Copy to clipboard if xclip is available
+if command -v xclip > /dev/null; then
+    echo -e "$commit_msg" | xclip -selection clipboard
+    echo -e "\n${GREEN}Commit message copied to clipboard!${NC}"
+fi
