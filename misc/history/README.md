@@ -1,261 +1,300 @@
-# History Wrapper Script
+# `hist` - Enhanced Shell History Manager
 
-This `history` wrapper enhances the default shell history command with a set of powerful features to help manage your command history more effectively. This README provides a detailed explanation of each function, along with examples to demonstrate how to use them.
+`hist` is a cross-shell command history enhancement tool designed for both **Bash** and **Zsh**. It expands the built-in `history` functionality with powerful features for managing, searching, and interacting with your shell command history.  
 
+All data is stored neatly under:
+
+```
+~/.config/.hist
+```
+
+This ensures your home directory remains clean.
+
+---
 
 ## Installation
 
-To use this history wrapper, add the function definition to your `.bashrc` or `.zshrc` file. Then source the file to make it available in your current terminal session:
-
+1. Save the `hist` script to:
 ```sh
-source ~/.bashrc
+~/.local/bin/hist
 ```
 
-or
-
+2. Make it executable:
 ```sh
-source ~/.zshrc
+chmod +x ~/.local/bin/hist
 ```
+
+3. Ensure `~/.local/bin` is in your `$PATH` (add to `.bashrc` or `.zshrc` if needed):
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+4. Run:
+```sh
+hist --help
+```
+
+---
 
 ## Features & Usage
 
 ### 1. Show Last `n` Entries
-Display the last `n` entries in history.
+Display the last `n` commands from history.
 
 **Usage:**
 ```sh
-history <n>
+hist <n>
 ```
 **Example:**
 ```sh
-history 20  # Shows the last 20 entries.
+hist 20
 ```
 
-### 2. Search for a Keyword in History
-Search the history for commands containing a specific keyword.
+---
+
+### 2. Search History
+Search for commands containing a specific keyword.
 
 **Usage:**
 ```sh
-history search <keyword>
+hist search <keyword>
 ```
 **Example:**
 ```sh
-history search git  # Shows all commands containing 'git'.
+hist search git
 ```
 
-### 3. Run a Specific Command by ID
-Run a specific command from history by its ID.
+---
+
+### 3. Run Command by ID
+Run a command directly from its history ID.
 
 **Usage:**
 ```sh
-history run <ID>
+hist run <ID>
 ```
 **Example:**
 ```sh
-history run 125  # Runs the command with ID 125 from the history.
+hist run 125
 ```
 
-### 4. Delete a Specific Command from History
-Delete a command from history by its ID.
+---
+
+### 4. Delete Command by ID
+Remove a command from history (can be restored).
 
 **Usage:**
 ```sh
-history delete <ID>
+hist delete <ID>
 ```
 **Example:**
 ```sh
-history delete 100  # Deletes the command with ID 100.
+hist delete 100
 ```
 
-### 5. Clear History
-Clear the entire command history.
+---
 
+### 5. Clear Entire History
 **Usage:**
 ```sh
-history clear
+hist clear
 ```
-**Example:**
-```sh
-history clear  # Clears the entire command history.
-```
+
+---
 
 ### 6. Show Unique Commands
-Display only the unique commands from the history to remove redundant entries.
+Filter out duplicate commands.
 
 **Usage:**
 ```sh
-history unique
-```
-**Example:**
-```sh
-history unique  # Shows unique commands used in history.
+hist unique
 ```
 
-### 7. Export History to a File
-Save the current command history to a file for backup or sharing.
+---
+
+### 7. Backup History
+Save history to a timestamped file.
 
 **Usage:**
 ```sh
-history export <filename>
-```
-**Example:**
-```sh
-history export my_history.txt  # Exports history to 'my_history.txt'.
+hist backup
 ```
 
-### 8. Import History from a File
-Import commands from a file and add them to the current history.
+---
+
+### 8. Restore Last Deleted Command
+Undo the most recent deletion.
 
 **Usage:**
 ```sh
-history import <filename>
-```
-**Example:**
-```sh
-history import my_history.txt  # Imports history from 'my_history.txt'.
+hist restorelast
 ```
 
-### 9. Show Command Usage Statistics
-Display statistics on command usage, showing the frequency of each command.
+---
+
+### 9. Favorite Command by ID
+Mark a command as a "favorite" for easy recall.
 
 **Usage:**
 ```sh
-history stats
-```
-**Example:**
-```sh
-history stats  # Shows command usage statistics.
+hist favorite <ID>
 ```
 
-### 10. Interactive Search with `fzf`
-Search the command history interactively using `fzf`.
+---
+
+### 10. Show Favorites
+List all saved favorites.
 
 **Usage:**
 ```sh
-history interactive
-```
-**Example:**
-```sh
-history interactive  # Opens an interactive search for history commands using 'fzf'.
+hist showfavorites
 ```
 
-### 11. Show History in a Specific Range
-View commands from a specific range of history IDs.
+---
+
+### 11. Blacklist Commands
+Prevent certain commands from being saved in history.
 
 **Usage:**
 ```sh
-history range <start_ID> <end_ID>
+hist blacklist <command>
 ```
-**Example:**
+Example:
 ```sh
-history range 50 100  # Shows commands from ID 50 to ID 100.
+hist blacklist ssh
 ```
+This will block all future `ssh` commands from being saved.
 
-### 12. Re-run the Last Command
-Re-run the last command executed before the most recent one.
+---
 
-**Usage:**
-```sh
-history last
-```
-**Example:**
-```sh
-history last  # Runs the last command executed.
-```
-
-### 13. Blacklist Commands from History
-Prevent specific commands from being saved in the history.
+### 12. Interactive Fuzzy Search
+Search history interactively using `fzf` (must be installed).
 
 **Usage:**
 ```sh
-history blacklist <command>
-```
-**Example:**
-```sh
-history blacklist ssh  # Prevents 'ssh' commands from being saved in history.
+hist interactive
 ```
 
-### 14. Mark a Command as Favorite
-Mark a command as a favorite by its ID, and save it for later reference.
+---
+
+### 13. Show History in Range
+View commands between two history IDs.
 
 **Usage:**
 ```sh
-history favorite <ID>
-```
-**Example:**
-```sh
-history favorite 345  # Marks command with ID 345 as a favorite.
+hist range <start> <end>
 ```
 
-### 15. Show Favorite Commands
-Display all the commands that have been marked as favorites.
+---
+
+### 14. Show Most Used Commands
+See the top 10 most frequently used commands.
 
 **Usage:**
 ```sh
-history showfavorites
-```
-**Example:**
-```sh
-history showfavorites  # Shows all favorite commands.
+hist mostused
 ```
 
-### 16. Backup History with Timestamp
-Create a backup of the history with a timestamp for later reference.
+---
+
+### 15. Save Session History
+Save current session history to a specific file.
 
 **Usage:**
 ```sh
-history backup
-```
-**Example:**
-```sh
-history backup  # Backs up the history to a timestamped file.
+hist savesession <filename>
 ```
 
-### 17. Restore Last Deleted Command
-Restore the last deleted command from history.
+---
+
+### 16. Restore Session History
+Load a saved session into current shell history.
 
 **Usage:**
 ```sh
-history restorelast
-```
-**Example:**
-```sh
-history restorelast  # Restores the last deleted command.
+hist restoresession <filename>
 ```
 
-### 18. Show the Most Frequently Used Commands
-Display a list of the most frequently used commands from history.
+---
 
-**Usage:**
-```sh
-history mostused
-```
-**Example:**
-```sh
-history mostused  # Shows the top 10 most frequently used commands.
+## How It Works
+
+- All data (backups, favorites, blacklist, deleted commands log) is stored in:
+    ```
+    ~/.config/.hist/
+    ```
+- No commands are `eval`ed directly — all are safely executed in a **subshell**.
+- Both **Bash** and **Zsh** are supported.
+- `hist` works by **reading directly from your live shell history**, so it always shows what your shell knows — no outdated caches.
+- Blacklisted commands never enter history at all.
+
+---
+
+## Data Storage Structure
+
+```text
+~/.config/.hist/
+├── backups/           # All backups stored here
+├── blacklist          # Commands to exclude from history
+├── favorites          # Saved favorite commands
+├── deleted.log        # Recently deleted commands (for restore)
 ```
 
-### 19. Save Current Session History
-Save the current session history to a specified file.
+---
 
-**Usage:**
+## Example Workflow
+
 ```sh
-history savesession <filename>
-```
-**Example:**
-```sh
-history savesession session_history.txt  # Saves the current session to 'session_history.txt'.
+# Search history for all git commands
+hist search git
+
+# Run command #123 from history
+hist run 123
+
+# Delete a specific command from history
+hist delete 200
+
+# Restore the last deleted command
+hist restorelast
+
+# Backup current history
+hist backup
+
+# Mark a useful command as favorite
+hist favorite 300
+
+# View all favorites
+hist showfavorites
+
+# Blacklist 'ls' (stop saving it to history)
+hist blacklist ls
+
+# Perform interactive fuzzy search using fzf
+hist interactive
 ```
 
-### 20. Restore Session History
-Restore history from a saved file to the current session.
+---
 
-**Usage:**
-```sh
-history restoresession <filename>
-```
-**Example:**
-```sh
-history restoresession session_history.txt  # Restores history from 'session_history.txt'.
-```
+## Compatibility
+
+✅ Bash 4.x+  
+✅ Zsh 5.x+  
+✅ Works on Linux, macOS, and WSL.
+
+---
+
+## Requirements
+
+- `fzf` (for `hist interactive`)
+- Standard `awk`, `grep`, `sed`, and `date` utilities
+
+---
+
+## License
+MIT License. You are free to use, modify, and distribute.
+
+---
+
+## Contributing
+Contributions are welcome. If you have an idea for a new feature, feel free to submit a pull request.
 
