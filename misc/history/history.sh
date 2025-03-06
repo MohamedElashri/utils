@@ -1,156 +1,207 @@
-history() {
-    HIST_BACKUP_DIR="$HOME/.history/.history_backups"
-    FAVORITES_FILE="$HOME/.history/.history_favorites"
+#!/usr/bin/env bash
 
-    show_help() {
-        echo "History Wrapper - Enhanced shell history management"
-        echo
-        echo "Usage: history [options] [arguments]"
-        echo
-        echo "Options:"
-        echo "  <n>                       Show last n entries."
-        echo "  search <keyword>          Search for commands containing a specific keyword."
-        echo "  run <ID>                  Run a command by its ID from history."
-        echo "  delete <ID>               Delete a specific command by ID."
-        echo "  clear                     Clear the entire command history."
-        echo "  unique                    Show unique commands in history."
-        echo "  export <filename>         Export the history to a file."
-        echo "  import <filename>         Import history from a file."
-        echo "  stats                     Show command usage statistics."
-        echo "  interactive               Interactive search of history using fzf."
-        echo "  range <start_ID> <end_ID> Show history within a range of IDs."
-        echo "  last                      Re-run the last executed command."
-        echo "  blacklist <command>       Prevent specific commands from being saved in history."
-        echo "  favorite <ID>             Mark a command as a favorite."
-        echo "  showfavorites             Show all favorite commands."
-        echo "  backup                    Backup the current history to a timestamped file."
-        echo "  restorelast               Restore the last deleted command."
-        echo "  mostused                  Show the most frequently used commands."
-        echo "  savesession <filename>    Save the current session history to a file."
-        echo "  restoresession <filename> Restore session history from a file."
-        echo "  -h, --help                Show this help message."
-        echo
-    }
+HIST_DIR="$HOME/.config/.hist"
+BLACKLIST_FILE="$HIST_DIR/blacklist"
+FAVORITES_FILE="$HIST_DIR/favorites"
+DELETED_LOG="$HIST_DIR/deleted.log"
+BACKUP_DIR="$HIST_DIR/backups"
 
-    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-        show_help
-    elif [ "$#" -eq 0 ]; then
-        # No arguments, display all history.
-        builtin history
-    elif [[ "$1" =~ ^[0-9]+$ ]]; then
-        # If first argument is a number, show last n entries.
-        builtin history | tail -n "$1"
-    elif [ "$1" = "search" ] && [ "$#" -ge 2 ]; then
-        # Search command. Usage: history search <keyword>
-        shift
-        builtin history | grep -i "$*"
-    elif [ "$1" = "run" ] && [ "$#" -eq 2 ]; then
-        # Run specific command by ID. Usage: history run <ID>
-        command=$(builtin history | grep -E "^ *$2" | sed 's/^[0-9 ]*//')
-        if [ -n "$command" ]; then
-            eval "$command"
-        else
-            echo "Command ID not found in history."
-        fi
-    elif [ "$1" = "delete" ] && [ "$#" -eq 2 ]; then
-        # Delete a specific command from history by ID. Usage: history delete <ID>
-        history -d "$2"
-        echo "Entry ID $2 deleted from history."
-    elif [ "$1" = "clear" ]; then
-        # Clear the entire history.
-        builtin history -c
-        echo "History cleared."
-    elif [ "$1" = "unique" ]; then
-        # Display unique commands. Usage: history unique
-        builtin history | awk '{$1=""; print $0}' | sort | uniq
-    elif [ "$1" = "export" ] && [ "$#" -eq 2 ]; then
-        # Export history to a file. Usage: history export <filename>
-        builtin history > "$2"
-        echo "History exported to $2."
-    elif [ "$1" = "import" ] && [ "$#" -eq 2 ]; then
-        # Import history from a file. Usage: history import <filename>
-        if [ -f "$2" ]; then
-            cat "$2" | while read -r cmd; do
-                history -s "$cmd"
-            done
-            echo "History imported from $2."
-        else
-            echo "File $2 not found."
-        fi
-    elif [ "$1" = "stats" ]; then
-        # Show command usage statistics. Usage: history stats
-        builtin history | awk '{$1=""; print $0}' | awk '{print $1}' | sort | uniq -c | sort -rn
-    elif [ "$1" = "interactive" ]; then
-        # Interactive search using fzf. Usage: history interactive
-        if command -v fzf >/dev/null 2>&1; then
-            cmd=$(builtin history | fzf | sed 's/^[0-9 ]*//')
-            if [ -n "$cmd" ]; then
-                eval "$cmd"
-            fi
-        else
-            echo "fzf is not installed. Please install it for interactive search."
-        fi
-    elif [ "$1" = "range" ] && [ "$#" -eq 3 ]; then
-        # Show history in a specified range. Usage: history range <start_ID> <end_ID>
-        builtin history | awk -v start="$2" -v end="$3" '$1 >= start && $1 <= end'
-    elif [ "$1" = "last" ]; then
-        # Re-run the last command. Usage: history last
-        command=$(builtin history | tail -n 2 | head -n 1 | sed 's/^[0-9 ]*//')
-        if [ -n "$command" ]; then
-            eval "$command"
-        fi
-    elif [ "$1" = "blacklist" ] && [ "$#" -eq 2 ]; then
-        # Blacklist specific commands from being saved in history. Usage: history blacklist <command>
-        export HISTIGNORE="$HISTIGNORE:$2"
-        echo "Command '$2' is now blacklisted from history."
-    elif [ "$1" = "favorite" ] && [ "$#" -eq 2 ]; then
-        # Mark a command as favorite by ID. Usage: history favorite <ID>
-        command=$(builtin history | grep -E "^ *$2" | sed 's/^[0-9 ]*//')
-        if [ -n "$command" ]; then
-            echo "$command" >> "$FAVORITES_FILE"
-            echo "Command added to favorites."
-        else
-            echo "Command ID not found in history."
-        fi
-    elif [ "$1" = "showfavorites" ]; then
-        # Show all favorite commands. Usage: history showfavorites
-        if [ -f "$FAVORITES_FILE" ]; then
-            cat "$FAVORITES_FILE"
-        else
-            echo "No favorites found."
-        fi
-    elif [ "$1" = "backup" ]; then
-        # Backup history to a timestamped file. Usage: history backup
-        mkdir -p "$HIST_BACKUP_DIR"
-        backup_file="$HIST_BACKUP_DIR/history_backup_$(date +%Y%m%d_%H%M%S).txt"
-        builtin history > "$backup_file"
-        echo "History backed up to $backup_file."
-    elif [ "$1" = "restorelast" ]; then
-        # Restore the last deleted command. Usage: history restorelast
-        last_deleted=$(tail -n 1 ~/.bash_history_deleted)
-        if [ -n "$last_deleted" ]; then
-            history -s "$last_deleted"
-            echo "Restored: $last_deleted"
-        else
-            echo "No deleted command to restore."
-        fi
-    elif [ "$1" = "mostused" ]; then
-        # Show the most frequently used commands. Usage: history mostused
-        builtin history | awk '{$1=""; print $0}' | awk '{print $1}' | sort | uniq -c | sort -rn | head -10
-    elif [ "$1" = "savesession" ]; then
-        # Save current session history to a custom file. Usage: history savesession <filename>
-        history -w "$2"
-        echo "Current session history saved to $2."
-    elif [ "$1" = "restoresession" ]; then
-        # Restore session history from a custom file. Usage: history restoresession <filename>
-        if [ -f "$2" ]; then
-            history -r "$2"
-            echo "Session history restored from $2."
-        else
-            echo "File $2 not found."
-        fi
+mkdir -p "$HIST_DIR" "$BACKUP_DIR"
+
+# Detect Shell Type
+detect_shell() {
+    if [ -n "$BASH_VERSION" ]; then
+        SHELL_TYPE="bash"
+        HIST_CMD="history"
+    elif [ -n "$ZSH_VERSION" ]; then
+        SHELL_TYPE="zsh"
+        HIST_CMD="fc -l -n"
     else
-        # Default case: if no match, pass all arguments to the builtin history command.
-        builtin history "$@"
+        echo "Unsupported shell" >&2
+        exit 1
     fi
 }
+
+# Load blacklist into array
+load_blacklist() {
+    touch "$BLACKLIST_FILE"
+    mapfile -t BLACKLIST < "$BLACKLIST_FILE"
+}
+
+# Check if a command is blacklisted
+is_blacklisted() {
+    local cmd="$1"
+    for blacklisted in "${BLACKLIST[@]}"; do
+        if [[ "$cmd" == "$blacklisted" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Get a command by history ID
+get_command_by_id() {
+    local id="$1"
+    if [ "$SHELL_TYPE" = "bash" ]; then
+        HISTTIMEFORMAT= history | awk -v id="$id" '$1 == id { $1=""; print substr($0,2) }'
+    else
+        fc -l -n | awk -v id="$id" '$1 == id { $1=""; print substr($0,2) }'
+    fi
+}
+
+# Display help
+show_help() {
+    cat <<EOF
+hist - Enhanced History Manager for Bash & Zsh
+
+Usage: hist [command] [arguments]
+
+Commands:
+  <n>                       Show last n entries.
+  search <keyword>          Search history for a keyword.
+  run <ID>                  Execute command by history ID.
+  delete <ID>                Delete command by ID (with restore option).
+  clear                      Clear the entire history.
+  unique                     Show unique commands.
+  backup                     Backup history to a timestamped file.
+  restorelast                Restore the last deleted command.
+  favorite <ID>              Mark command as favorite.
+  showfavorites              List all favorite commands.
+  blacklist <command>        Add a command to the blacklist (prevent saving).
+  interactive                 Fuzzy search history using fzf.
+  range <start> <end>        Show history entries in range.
+  mostused                   List the top 10 most used commands.
+  savesession <file>         Save current session history to file.
+  restoresession <file>      Load history from file into current session.
+
+Options:
+  -h, --help                 Show this help message.
+
+Data stored at: $HIST_DIR
+EOF
+}
+
+# Command functions
+hist_show_last_n() { $HIST_CMD | tail -n "$1"; }
+
+hist_search() { $HIST_CMD | grep -i -- "$1"; }
+
+hist_run() {
+    local command
+    command=$(get_command_by_id "$1")
+    if [ -n "$command" ]; then
+        builtin "$SHELL" -c "$command"
+    else
+        echo "Command ID $1 not found" >&2
+    fi
+}
+
+hist_delete() {
+    local command
+    command=$(get_command_by_id "$1")
+    if [ -n "$command" ]; then
+        echo "$command" >> "$DELETED_LOG"
+        history -d "$1"
+        echo "Deleted command $1 and saved to deleted.log"
+    else
+        echo "Command ID $1 not found" >&2
+    fi
+}
+
+hist_backup() {
+    local file="$BACKUP_DIR/history_$(date +%Y%m%d_%H%M%S).txt"
+    $HIST_CMD > "$file"
+    echo "Backup saved to $file"
+}
+
+hist_favorite() {
+    local command
+    command=$(get_command_by_id "$1")
+    if [ -n "$command" ]; then
+        echo "$command" >> "$FAVORITES_FILE"
+        echo "Command $1 added to favorites"
+    else
+        echo "Command ID $1 not found" >&2
+    fi
+}
+
+hist_showfavorites() { [ -f "$FAVORITES_FILE" ] && cat "$FAVORITES_FILE" || echo "No favorites yet."; }
+
+hist_restorelast() {
+    local last_command
+    last_command=$(tail -n 1 "$DELETED_LOG")
+    if [ -n "$last_command" ]; then
+        history -s "$last_command"
+        sed -i '' -e '$d' "$DELETED_LOG"
+        echo "Restored: $last_command"
+    else
+        echo "No command to restore" >&2
+    fi
+}
+
+hist_blacklist() {
+    local cmd="$1"
+    if grep -Fxq "$cmd" "$BLACKLIST_FILE"; then
+        echo "Command already blacklisted"
+    else
+        echo "$cmd" >> "$BLACKLIST_FILE"
+        echo "Blacklisted: $cmd"
+    fi
+}
+
+hist_unique() { $HIST_CMD | awk '{$1=""; print substr($0,2)}' | sort -u; }
+
+hist_mostused() { $HIST_CMD | awk '{$1=""; print $0}' | awk '{print $1}' | sort | uniq -c | sort -rn | head -10; }
+
+hist_range() { $HIST_CMD | awk -v start="$1" -v end="$2" '$1 >= start && $1 <= end'; }
+
+hist_interactive() {
+    if ! command -v fzf >/dev/null; then
+        echo "fzf not found, install it for interactive mode" >&2
+        return 1
+    fi
+    local command
+    command=$($HIST_CMD | fzf | sed 's/^[0-9 ]*//')
+    [ -n "$command" ] && builtin "$SHELL" -c "$command"
+}
+
+hist_clear() { history -c && echo "History cleared"; }
+
+hist_savesession() { history -w "$1" && echo "Session saved to $1"; }
+
+hist_restoresession() {
+    if [ -f "$1" ]; then
+        history -r "$1" && echo "Session restored from $1"
+    else
+        echo "File not found: $1" >&2
+    fi
+}
+
+# Dispatcher
+main() {
+    detect_shell
+    load_blacklist
+
+    case "$1" in
+        -h|--help) show_help ;;
+        search) hist_search "$2" ;;
+        run) hist_run "$2" ;;
+        delete) hist_delete "$2" ;;
+        clear) hist_clear ;;
+        unique) hist_unique ;;
+        backup) hist_backup ;;
+        restorelast) hist_restorelast ;;
+        favorite) hist_favorite "$2" ;;
+        showfavorites) hist_showfavorites ;;
+        blacklist) hist_blacklist "$2" ;;
+        interactive) hist_interactive ;;
+        range) hist_range "$2" "$3" ;;
+        mostused) hist_mostused ;;
+        savesession) hist_savesession "$2" ;;
+        restoresession) hist_restoresession "$2" ;;
+        "") $HIST_CMD ;;
+        *) hist_show_last_n "$1" ;;
+    esac
+}
+
+main "$@"
