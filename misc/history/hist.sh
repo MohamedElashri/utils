@@ -65,25 +65,42 @@ sanitize_text() {
 }
 
 # Process zsh history file with proper encoding handling
-# Returns raw commands without timestamps
 process_zsh_history() {
     # Create a temporary file for processed history
     local temp_hist="$HIST_DIR/temp_processed_hist"
     
-    # Method 1: Extract just the command part after semicolon
-    LC_ALL=C cat "$HISTFILE_PATH" | 
-    perl -ne 'print $1 if /^:[^;]*;(.*)/' > "$temp_hist" 2>/dev/null
-    
-    # If that didn't work (empty file), try with grep
-    if [ ! -s "$temp_hist" ]; then
-        # Method 2: Get lines without timestamps
-        LC_ALL=C grep -a -v "^:" "$HISTFILE_PATH" > "$temp_hist" 2>/dev/null
+    # First check if the file contains line-numbered entries (like in paste-2.txt)
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # Handle pre-formatted history with line numbers
+        # This is likely from a 'history' command output
+        sed -E 's/^ *([0-9]+) +//' "$HISTFILE_PATH" > "$temp_hist"
+    else    
+        # Try standard ZSH history format
+        LC_ALL=C cat "$HISTFILE_PATH" | 
+        perl -ne '
+            # Match zsh history format with timestamp: : timestamp:elapsed;command
+            if (/^:[0-9]+:[0-9]+;(.*)/) {
+                print "$1\n";
+            }
+            # Extended format sometimes used in zsh
+            elsif (/^:\s*[0-9]+:[0-9]+:[0-9]+;(.*)/) {
+                print "$1\n";
+            }
+            # Alternative format with space after colon
+            elsif (/^: ([0-9]+):([0-9]+);(.*)/) {
+                print "$3\n";
+            }
+            # If no match (simple format), print the whole line
+            elsif (!/^:/) {
+                print "$_";
+            }
+        ' | sanitize_text > "$temp_hist"
     fi
     
-    # If still empty, use a more aggressive approach
+    # If file is still empty after all attempts, try a simpler approach
     if [ ! -s "$temp_hist" ]; then
-        # Method 3: Just sanitize everything
-        LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text > "$temp_hist"
+        # Just take everything after a semicolon if it exists, otherwise the whole line
+        LC_ALL=C cat "$HISTFILE_PATH" | sed -E 's/^:[^;]*;//' | sanitize_text > "$temp_hist"
     fi
     
     # Output the contents of the temporary file
@@ -91,6 +108,59 @@ process_zsh_history() {
     
     # Cleanup
     rm -f "$temp_hist"
+}
+
+# Parse the history file from paste-2.txt directly
+# This function handles the specific format seen in the user's input
+parse_formatted_history() {
+    local num_entries=${1:-10}  # Default to 10 entries if not specified
+    
+    # Create array to store commands
+    declare -a commands
+    
+    # Read the history entries
+    while IFS= read -r line; do
+        # Skip empty lines
+        [ -z "$line" ] && continue
+        
+        # Extract command from the line (remove leading number and spaces)
+        command=$(echo "$line" | sed -E 's/^ *[0-9]+ +//')
+        
+        # Add to commands array
+        commands+=("$command")
+    done < "$HISTFILE_PATH"
+    
+    # Get total count of commands
+    local total_cmds=${#commands[@]}
+    
+    # If requested more than we have, adjust
+    if [ "$num_entries" -gt "$total_cmds" ]; then
+        num_entries=$total_cmds
+    fi
+    
+    # Calculate starting index to get the last N entries
+    local start_idx=$((total_cmds - num_entries))
+    if [ "$start_idx" -lt 0 ]; then
+        start_idx=0
+    fi
+    
+    # Output the last num_entries commands with numbers
+    for ((i=start_idx; i<total_cmds; i++)); do
+        echo "$((i - start_idx + 1))  ${commands[$i]}"
+    done
+}
+
+# Format display output with proper line breaks
+format_display() {
+    awk '{
+        # Replace runs of spaces with a single space
+        gsub(/[ \t]+/, " ");
+        # Trim leading/trailing whitespace
+        sub(/^[ \t]+/, "");
+        sub(/[ \t]+$/, "");
+        # Print if not empty
+        if (length($0) > 0) print $0;
+    }'
 }
 
 # Load blacklist into array
@@ -110,14 +180,24 @@ is_blacklisted() {
     return 1
 }
 
-# Get a command by history ID - reads directly from history file
+# Get a command by history ID
 get_command_by_id() {
     local id="$1"
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        cat "$HISTFILE_PATH" | sanitize_text | nl -b a | awk -v id="$id" '$1 == id {$1=""; print substr($0,2)}'
+    
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # Extract the command with the given ID from formatted history
+        grep -E "^ *$id " "$HISTFILE_PATH" | sed -E 's/^ *[0-9]+ +//'
     else
-        # For zsh, use our special processing function
-        process_zsh_history | nl -b a | awk -v id="$id" '$1 == id {$1=""; print substr($0,2)}'
+        # Process the raw history file
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            cat "$HISTFILE_PATH" | sanitize_text | format_display | nl -b a | 
+            awk -v id="$id" '$1 == id {$1=""; print substr($0,2)}'
+        else
+            # For zsh, use our special processing function
+            process_zsh_history | format_display | nl -b a | 
+            awk -v id="$id" '$1 == id {$1=""; print substr($0,2)}'
+        fi
     fi
 }
 
@@ -153,12 +233,19 @@ Data stored at: $HIST_DIR
 EOF
 }
 
-# Command functions - using our safe zsh history processing
+# Command functions with format detection
 hist_show_last_n() { 
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        cat "$HISTFILE_PATH" | sanitize_text | tail -n "$1" | nl -b a
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # Use the specialized parser for pre-formatted history
+        parse_formatted_history "$1"
     else
-        process_zsh_history | tail -n "$1" | nl -b a
+        # Process as normal
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            cat "$HISTFILE_PATH" | sanitize_text | format_display | tail -n "$1" | nl -b a
+        else
+            process_zsh_history | format_display | tail -n "$1" | nl -b a
+        fi
     fi
 }
 
@@ -166,10 +253,15 @@ hist_search() {
     local keyword="$1"
     local results
     
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        results=$(LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | grep -i -- "$keyword")
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        results=$(grep -i -- "$keyword" "$HISTFILE_PATH")
     else
-        results=$(LC_ALL=C process_zsh_history | grep -i -- "$keyword")
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            results=$(LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | format_display | grep -i -- "$keyword")
+        else
+            results=$(LC_ALL=C process_zsh_history | format_display | grep -i -- "$keyword")
+        fi
     fi
     
     # Display results with line numbers
@@ -253,27 +345,52 @@ hist_blacklist() {
     fi
 }
 
-hist_unique() { 
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | sort -u | nl -b a
+hist_unique() {
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # For pre-formatted history, extract and sort unique commands
+        sed -E 's/^ *[0-9]+ +//' "$HISTFILE_PATH" | sort -u | nl -b a
     else
-        LC_ALL=C process_zsh_history | sort -u | nl -b a
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | format_display | sort -u | nl -b a
+        else
+            LC_ALL=C process_zsh_history | format_display | sort -u | nl -b a
+        fi
     fi
 }
 
-hist_mostused() { 
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | awk '{print $1}' | sort | uniq -c | sort -rn | head -10
+hist_mostused() {
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # For pre-formatted history, extract commands and count frequencies
+        sed -E 's/^ *[0-9]+ +//' "$HISTFILE_PATH" | awk '{print $1}' | sort | uniq -c | sort -rn | head -10
     else
-        LC_ALL=C process_zsh_history | awk '{print $1}' | sort | uniq -c | sort -rn | head -10
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | format_display | 
+            awk '{print $1}' | sort | uniq -c | sort -rn | head -10
+        else
+            LC_ALL=C process_zsh_history | format_display | 
+            awk '{print $1}' | sort | uniq -c | sort -rn | head -10
+        fi
     fi
 }
 
-hist_range() { 
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | nl -b a | awk -v start="$1" -v end="$2" '$1 >= start && $1 <= end {$1=""; print substr($0,2)}'
+hist_range() {
+    local start="$1"
+    local end="$2"
+    
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # For pre-formatted history, extract commands in range by their line numbers
+        grep -E "^ *($start|$end|[$start-$end][0-9]*) " "$HISTFILE_PATH"
     else
-        LC_ALL=C process_zsh_history | nl -b a | awk -v start="$1" -v end="$2" '$1 >= start && $1 <= end {$1=""; print substr($0,2)}'
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            LC_ALL=C cat "$HISTFILE_PATH" | sanitize_text | format_display | nl -b a | 
+            awk -v start="$start" -v end="$end" '$1 >= start && $1 <= end {print $0}'
+        else
+            LC_ALL=C process_zsh_history | format_display | nl -b a | 
+            awk -v start="$start" -v end="$end" '$1 >= start && $1 <= end {print $0}'
+        fi
     fi
 }
 
@@ -284,10 +401,17 @@ hist_interactive() {
     fi
     
     local command
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        command=$(cat "$HISTFILE_PATH" | sanitize_text | fzf)
+    
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # For pre-formatted history, extract commands and use fzf
+        command=$(sed -E 's/^ *[0-9]+ +//' "$HISTFILE_PATH" | fzf)
     else
-        command=$(process_zsh_history | fzf)
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            command=$(cat "$HISTFILE_PATH" | sanitize_text | format_display | fzf)
+        else
+            command=$(process_zsh_history | format_display | fzf)
+        fi
     fi
     
     [ -n "$command" ] && eval "$command"
@@ -302,13 +426,21 @@ hist_clear() {
     echo "History cleared" 
 }
 
-hist_savesession() { 
-    if [ "$SHELL_TYPE" = "bash" ]; then
-        cat "$HISTFILE_PATH" | sanitize_text > "$1" 
+hist_savesession() {
+    local output_file="$1"
+    
+    # Check if the history file is already a formatted history output
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        # For pre-formatted history, extract commands without line numbers
+        sed -E 's/^ *[0-9]+ +//' "$HISTFILE_PATH" > "$output_file"
     else
-        process_zsh_history > "$1"
+        if [ "$SHELL_TYPE" = "bash" ]; then
+            cat "$HISTFILE_PATH" | sanitize_text | format_display > "$output_file" 
+        else
+            process_zsh_history | format_display > "$output_file"
+        fi
     fi
-    echo "Session saved to $1"
+    echo "Session saved to $output_file"
 }
 
 hist_restoresession() {
@@ -323,7 +455,12 @@ hist_restoresession() {
 main() {
     detect_shell
     load_blacklist
-
+    
+    # Check the format of the history file
+    if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+        echo "Detected pre-formatted history file with line numbers" >&2
+    fi
+    
     case "$1" in
         -h|--help) show_help ;;
         search) hist_search "$2" ;;
@@ -342,13 +479,27 @@ main() {
         savesession) hist_savesession "$2" ;;
         restoresession) hist_restoresession "$2" ;;
         "") 
-            if [ "$SHELL_TYPE" = "bash" ]; then
-                cat "$HISTFILE_PATH" | sanitize_text | nl -b a
+            # When no arguments, show all history
+            if grep -q '^ *[0-9]\+ \+' "$HISTFILE_PATH"; then
+                # For pre-formatted history, show as is
+                cat "$HISTFILE_PATH"
             else
-                process_zsh_history | nl -b a
+                if [ "$SHELL_TYPE" = "bash" ]; then
+                    cat "$HISTFILE_PATH" | sanitize_text | format_display | nl -b a
+                else
+                    process_zsh_history | format_display | nl -b a
+                fi
             fi
             ;;
-        *) hist_show_last_n "$1" ;;
+        *) 
+            # Show last n entries or handle any other command
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                hist_show_last_n "$1"
+            else
+                echo "Unknown command: $1"
+                show_help
+            fi
+            ;;
     esac
 }
 
