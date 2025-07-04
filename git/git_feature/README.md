@@ -27,7 +27,7 @@ Follow these steps to install the script:
     Download the script directly:
 
     ```bash
-    wget -O $HOME/.local/bin/git_feature https://github.com/MohamedElashri/utils/raw/refs/heads/main/git/git_feature/git_feature.sh && chmod +x $HOME/.local/bin/git_feature
+    wget -O $HOME/.local/bin/git_feature https://github.com/MohamedElashri/utils/raw/refs/heads/main/git/git_feature/git_feature.sh 
     ```
 
     Or create the file directly with:
@@ -37,12 +37,6 @@ Follow these steps to install the script:
     ```
 
     Then paste the script content into the file and save it.
-
-   Then we need to give execusion permission
-
-   ```bash
-   chmod +x $HOME/.local/bin/git_feature
-   ```
 
 4. **Make the script executable:**
 
